@@ -2,6 +2,7 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { normalizeAiAgentInput, parseAiAgentInput } from './shared/digital-card-ai-agent.ts';
 
 const app = express();
@@ -9,6 +10,23 @@ const PORT = 3000;
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Contas Master com acesso irrestrito
+export const MASTER_EMAILS = [
+  'consultatomosinfinity@gmail.com',
+  'atomoseletrotecnica@gmail.com',
+];
+
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
+const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY || '';
+const SUPABASE_PUBLISHABLE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
+
+let supabaseAdmin: any = null;
+if (SUPABASE_URL && (SUPABASE_SECRET_KEY || SUPABASE_PUBLISHABLE_KEY)) {
+  supabaseAdmin = createSupabaseClient(SUPABASE_URL, SUPABASE_SECRET_KEY || SUPABASE_PUBLISHABLE_KEY, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
 
 // Banco de dados em arquivo JSON local para persistência rápida e robusta
 const DATA_DIR = path.join(process.cwd(), 'data');
@@ -19,6 +37,7 @@ if (!fs.existsSync(DATA_DIR)) {
 const CARDS_FILE = path.join(DATA_DIR, 'cards.json');
 const EVENTS_FILE = path.join(DATA_DIR, 'events.json');
 const INQUIRIES_FILE = path.join(DATA_DIR, 'inquiries.json');
+const USERS_FILE = path.join(DATA_DIR, 'users.json');
 
 // Memória de rate limit para formulário de contato (max 5 por cartão por hora)
 const inquirySubmissions: { cardId: number; timestamp: number }[] = [];
@@ -51,6 +70,16 @@ function setNoCacheHeaders(res: express.Response): void {
   res.setHeader('Expires', '0');
   res.setHeader('Surrogate-Control', 'no-store');
 }
+
+// Rota pública de configuração para o frontend obter as chaves públicas do Supabase com segurança
+// A chave secreta (SUPABASE_SECRET_KEY) NUNCA é enviada para o cliente!
+app.get('/api/config', (req, res) => {
+  setNoCacheHeaders(res);
+  res.json({
+    supabaseUrl: process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '',
+    supabasePublishableKey: process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '',
+  });
+});
 
 // Sistema de Server-Sent Events (SSE) para atualização instantânea em tempo real entre abas e dispositivos
 type SseClient = {
@@ -644,6 +673,323 @@ app.get('/api/cards/:id/inquiries', (req, res) => {
   const inquiries = readJson<any[]>(INQUIRIES_FILE, []);
   const cardInquiries = inquiries.filter((i) => i.cardId === cardId);
   res.json(cardInquiries);
+});
+
+// ----------------------------------------------------
+// 5. APIS DE ADMINISTRAÇÃO MASTER (Acesso Total)
+// ----------------------------------------------------
+
+function seedInitialUsers() {
+  const existingUsers = readJson<any[]>(USERS_FILE, []);
+  if (existingUsers.length === 0) {
+    const defaultUsers = [
+      {
+        id: 'master-jurandir',
+        email: 'consultatomosinfinity@gmail.com',
+        fullName: 'Jurandir Hora',
+        role: 'master',
+        plan: 'corporativo',
+        status: 'ativo',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      {
+        id: 'master-atomos',
+        email: 'atomoseletrotecnica@gmail.com',
+        fullName: 'Átomos Eletrotécnica',
+        role: 'master',
+        plan: 'corporativo',
+        status: 'ativo',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    ];
+    writeJson(USERS_FILE, defaultUsers);
+  }
+}
+seedInitialUsers();
+
+// Listar todos os usuários (com total de cartões)
+app.get('/api/admin/users', async (req, res) => {
+  setNoCacheHeaders(res);
+  try {
+    let usersList: any[] = [];
+
+    // Tenta carregar do Supabase se disponível
+    if (supabaseAdmin) {
+      try {
+        const { data: dbProfiles, error } = await supabaseAdmin
+          .from('profiles')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (!error && dbProfiles && dbProfiles.length > 0) {
+          usersList = dbProfiles.map((p: any) => ({
+            id: p.id,
+            email: p.email,
+            fullName: p.full_name || '',
+            role: MASTER_EMAILS.includes(p.email?.toLowerCase()) ? 'master' : (p.role || 'cliente'),
+            plan: MASTER_EMAILS.includes(p.email?.toLowerCase()) ? 'corporativo' : (p.plan || 'degustacao'),
+            status: p.status || 'ativo',
+            createdAt: p.created_at,
+            updatedAt: p.updated_at,
+          }));
+        }
+      } catch (dbErr) {
+        console.warn('Falha ao consultar perfis do Supabase:', dbErr);
+      }
+    }
+
+    // Mescla com arquivo local users.json
+    const localUsers = readJson<any[]>(USERS_FILE, []);
+    for (const lu of localUsers) {
+      if (!usersList.some((u) => u.email?.toLowerCase() === lu.email?.toLowerCase() || u.id === lu.id)) {
+        usersList.push(lu);
+      }
+    }
+
+    // Garante que os dois e-mails Master estejam sempre na lista
+    for (const masterEmail of MASTER_EMAILS) {
+      if (!usersList.some((u) => u.email?.toLowerCase() === masterEmail)) {
+        usersList.unshift({
+          id: `master-${masterEmail.split('@')[0]}`,
+          email: masterEmail,
+          fullName: masterEmail.includes('jurandir') ? 'Jurandir Hora' : 'Átomos Eletrotécnica',
+          role: 'master',
+          plan: 'corporativo',
+          status: 'ativo',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        });
+      }
+    }
+
+    // Calcula contagem de cartões por usuário
+    const cards = readJson<any[]>(CARDS_FILE, []);
+    const cardsCountMap: Record<string, number> = {};
+    for (const card of cards) {
+      const uKey = String(card.userId);
+      cardsCountMap[uKey] = (cardsCountMap[uKey] || 0) + 1;
+    }
+
+    const enriched = usersList.map((u) => ({
+      ...u,
+      cardsCount: cardsCountMap[String(u.id)] || 0,
+    }));
+
+    return res.json(enriched);
+  } catch (err: any) {
+    console.error('Erro ao listar usuários:', err);
+    return res.status(500).json({ error: 'Erro interno ao listar usuários' });
+  }
+});
+
+// Criar novo usuário (com role, plano e senha)
+app.post('/api/admin/users', async (req, res) => {
+  try {
+    const { email, password, fullName, role, plan } = req.body;
+
+    if (!email || !email.includes('@')) {
+      return res.status(400).json({ error: 'E-mail válido é obrigatório.' });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const finalRole = MASTER_EMAILS.includes(cleanEmail) ? 'master' : (role || 'cliente');
+    const finalPlan = MASTER_EMAILS.includes(cleanEmail) ? 'corporativo' : (plan || 'degustacao');
+
+    let createdId = `user-${Date.now()}`;
+
+    // Cria no Supabase Auth se admin client configurado
+    if (supabaseAdmin) {
+      try {
+        const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+          email: cleanEmail,
+          password: password || 'Atomos123!',
+          email_confirm: true,
+          user_metadata: {
+            full_name: fullName || '',
+            role: finalRole,
+            plan: finalPlan,
+          },
+        });
+
+        if (!authError && authData?.user) {
+          createdId = authData.user.id;
+
+          // Insere/atualiza na tabela profiles
+          await supabaseAdmin.from('profiles').upsert({
+            id: createdId,
+            email: cleanEmail,
+            full_name: fullName || '',
+            role: finalRole,
+            plan: finalPlan,
+            status: 'ativo',
+            updated_at: new Date().toISOString(),
+          });
+        }
+      } catch (authErr) {
+        console.warn('Erro ao criar usuário no Supabase Auth:', authErr);
+      }
+    }
+
+    // Persiste também no users.json local
+    const localUsers = readJson<any[]>(USERS_FILE, []);
+    const existingIndex = localUsers.findIndex((u) => u.email?.toLowerCase() === cleanEmail);
+    const newUser = {
+      id: createdId,
+      email: cleanEmail,
+      fullName: fullName || '',
+      role: finalRole,
+      plan: finalPlan,
+      status: 'ativo',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (existingIndex !== -1) {
+      localUsers[existingIndex] = newUser;
+    } else {
+      localUsers.push(newUser);
+    }
+    writeJson(USERS_FILE, localUsers);
+
+    return res.status(201).json({ success: true, user: newUser });
+  } catch (err: any) {
+    console.error('Erro ao cadastrar usuário:', err);
+    return res.status(500).json({ error: err.message || 'Erro ao criar usuário.' });
+  }
+});
+
+// Atualizar usuário (função, plano, status, nome)
+app.put('/api/admin/users/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { fullName, role, plan, status } = req.body;
+
+    const localUsers = readJson<any[]>(USERS_FILE, []);
+    const userIndex = localUsers.findIndex((u) => u.id === id || String(u.id) === String(id));
+    const targetUser = userIndex !== -1 ? localUsers[userIndex] : null;
+
+    const targetEmail = (targetUser?.email || '').toLowerCase();
+    const isPrimaryMaster = MASTER_EMAILS.includes(targetEmail);
+
+    if (isPrimaryMaster) {
+      if (role && role !== 'master') {
+        return res.status(400).json({ error: 'As contas Master principais não podem ter sua função rebaixada.' });
+      }
+      if (status && status !== 'ativo') {
+        return res.status(400).json({ error: 'As contas Master principais não podem ser pausadas ou bloqueadas.' });
+      }
+    }
+
+    // Atualiza no Supabase se disponível
+    if (supabaseAdmin) {
+      try {
+        const updatePayload: Record<string, any> = { updated_at: new Date().toISOString() };
+        if (fullName !== undefined) updatePayload.full_name = fullName;
+        if (role !== undefined && !isPrimaryMaster) updatePayload.role = role;
+        if (plan !== undefined) updatePayload.plan = plan;
+        if (status !== undefined && !isPrimaryMaster) updatePayload.status = status;
+
+        await supabaseAdmin.from('profiles').update(updatePayload).eq('id', id);
+
+        // Atualiza metadata no Auth
+        if (fullName !== undefined || role !== undefined || plan !== undefined) {
+          await supabaseAdmin.auth.admin.updateUserById(id, {
+            user_metadata: {
+              ...(fullName !== undefined ? { full_name: fullName } : {}),
+              ...(role !== undefined ? { role } : {}),
+              ...(plan !== undefined ? { plan } : {}),
+            },
+          });
+        }
+      } catch (dbErr) {
+        console.warn('Erro ao atualizar perfil no Supabase:', dbErr);
+      }
+    }
+
+    // Atualiza no USERS_FILE
+    if (userIndex !== -1) {
+      localUsers[userIndex] = {
+        ...localUsers[userIndex],
+        ...(fullName !== undefined ? { fullName } : {}),
+        ...(role !== undefined && !isPrimaryMaster ? { role } : {}),
+        ...(plan !== undefined ? { plan } : {}),
+        ...(status !== undefined && !isPrimaryMaster ? { status } : {}),
+        updatedAt: new Date().toISOString(),
+      };
+      writeJson(USERS_FILE, localUsers);
+    }
+
+    return res.json({ success: true, message: 'Usuário atualizado com sucesso!' });
+  } catch (err: any) {
+    console.error('Erro ao atualizar usuário:', err);
+    return res.status(500).json({ error: err.message || 'Erro ao atualizar usuário.' });
+  }
+});
+
+// Excluir usuário (Master Only)
+app.delete('/api/admin/users/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const localUsers = readJson<any[]>(USERS_FILE, []);
+    const targetUser = localUsers.find((u) => u.id === id || String(u.id) === String(id));
+    const targetEmail = (targetUser?.email || '').toLowerCase();
+
+    if (MASTER_EMAILS.includes(targetEmail)) {
+      return res.status(400).json({ error: 'Não é permitido excluir as contas Master principais da plataforma.' });
+    }
+
+    // Exclui do Supabase Auth e DB
+    if (supabaseAdmin) {
+      try {
+        await supabaseAdmin.auth.admin.deleteUser(id);
+        await supabaseAdmin.from('profiles').delete().eq('id', id);
+        await supabaseAdmin.from('digital_cards').delete().eq('user_id', id);
+      } catch (authErr) {
+        console.warn('Erro ao deletar usuário do Supabase Auth:', authErr);
+      }
+    }
+
+    // Exclui do users.json
+    const updatedUsers = localUsers.filter((u) => u.id !== id && String(u.id) !== String(id));
+    writeJson(USERS_FILE, updatedUsers);
+
+    return res.json({ success: true, message: 'Usuário e dados associados excluídos com sucesso!' });
+  } catch (err: any) {
+    console.error('Erro ao excluir usuário:', err);
+    return res.status(500).json({ error: err.message || 'Erro ao excluir usuário.' });
+  }
+});
+
+// Redefinir senha de um usuário
+app.post('/api/admin/users/:id/reset-password', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { email, newPassword } = req.body;
+
+    if (supabaseAdmin) {
+      if (newPassword && newPassword.length >= 6) {
+        const { error } = await supabaseAdmin.auth.admin.updateUserById(id, {
+          password: newPassword,
+        });
+        if (error) throw error;
+        return res.json({ success: true, message: 'Senha atualizada diretamente para o usuário!' });
+      } else if (email) {
+        const { error } = await supabaseAdmin.auth.resetPasswordForEmail(email, {
+          redirectTo: `${req.protocol}://${req.get('host')}/app`,
+        });
+        if (error) throw error;
+        return res.json({ success: true, message: `E-mail de recuperação de senha enviado para ${email}!` });
+      }
+    }
+
+    return res.json({ success: true, message: 'Instruções de redefinição registradas com sucesso!' });
+  } catch (err: any) {
+    console.error('Erro ao redefinir senha:', err);
+    return res.status(500).json({ error: err.message || 'Erro ao redefinir senha.' });
+  }
 });
 
 // ----------------------------------------------------

@@ -1,0 +1,53 @@
+name: Supabase Keep-Alive Health Check
+
+on:
+  schedule:
+    # Executa duas vezes por semana: Segunda-feira e Quinta-feira às 10:00 UTC
+    - cron: '0 10 * * 1,4'
+  workflow_dispatch: # Permite execução manual a qualquer momento pelo GitHub Actions
+
+jobs:
+  keep-alive:
+    name: Ping Supabase Database
+    runs-on: ubuntu-latest
+    steps:
+      - name: Executar consulta mínima de disponibilidade (Health Check)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          # Utiliza Secret Key se disponível para privilégio administrativo, ou Publishable Key
+          SUPABASE_KEY: ${{ secrets.SUPABASE_SECRET_KEY || secrets.SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_KEY" ]; then
+            echo "::error::SUPABASE_URL ou chaves de API não configuradas nos GitHub Secrets."
+            exit 1
+          fi
+
+          echo "Enviando ping de disponibilidade para o Supabase..."
+          
+          # Consulta segura e somente leitura na tabela minimalista 'system_health'
+          # Sem inserção de dados falsos e sem modificar projetos existentes
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X GET "${SUPABASE_URL}/rest/v1/system_health?select=status&limit=1" \
+            -H "apikey: ${SUPABASE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_KEY}" \
+            -H "Content-Type: application/json")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+
+          echo "Código HTTP recebido: $HTTP_CODE"
+
+          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+            echo "✅ Supabase ativo e respondendo com sucesso! Health check concluído."
+          else
+            echo "::warning::Resposta inesperada do Supabase: $BODY (HTTP $HTTP_CODE)"
+            # Se a tabela system_health ainda não existir (antes da migration), realiza fallback no endpoint raiz REST
+            FALLBACK_HTTP=$(curl -s -o /dev/null -w "%{http_code}" -X GET "${SUPABASE_URL}/rest/v1/" \
+              -H "apikey: ${SUPABASE_KEY}" \
+              -H "Authorization: Bearer ${SUPABASE_KEY}")
+            echo "Resposta fallback /rest/v1/: HTTP $FALLBACK_HTTP"
+            if [ "$FALLBACK_HTTP" -ge 200 ] && [ "$FALLBACK_HTTP" -lt 400 ]; then
+              echo "✅ Conexão básica com Supabase validada com sucesso."
+            else
+              exit 1
+            fi
+          fi

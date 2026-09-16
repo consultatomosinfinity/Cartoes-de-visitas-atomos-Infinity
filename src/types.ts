@@ -17,6 +17,22 @@ export type OutboundDestination =
   | 'ai_agent';
 export type InquiryStatus = 'novo' | 'lido' | 'arquivado';
 
+export type UserRole = 'master' | 'admin' | 'colaborador' | 'cliente';
+export type UserPlan = 'degustacao' | 'profissional' | 'negocios_ia' | 'corporativo';
+export type UserAccountStatus = 'ativo' | 'pausado' | 'bloqueado';
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  fullName?: string;
+  role: UserRole;
+  plan: UserPlan;
+  status: UserAccountStatus;
+  cardsCount?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface DigitalCard {
   id: number;
   userId: number;

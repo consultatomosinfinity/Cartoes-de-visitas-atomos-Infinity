@@ -40,14 +40,27 @@ import {
   Camera,
   Check,
   Download,
+  Home,
+  LogOut,
+  Crown,
+  Shield,
+  Users,
+  UserPlus,
 } from 'lucide-react';
 import { DigitalCard, CardMetrics, DigitalCardInquiry } from '../types.ts';
 import { PRESET_THEMES } from '../../shared/digital-card-appearance.ts';
 import { getAiAgentButtonGlowClass, getAiAgentButtonPaddingY, AiAgentGlowIntensity, AiAgentButtonSize } from '../../shared/digital-card-ai-agent.ts';
 import { DigitalCardLivePreview } from '../components/DigitalCardLivePreview.tsx';
 import { ThemeToggle } from '../components/ThemeToggle.tsx';
+import { useAuth } from '../contexts/AuthContext.tsx';
+import { initSupabase, uploadCardAsset, mapDbToDigitalCard, mapDigitalCardToDb } from '../lib/supabase.ts';
+import { AdminUsersManager } from '../components/AdminUsersManager.tsx';
 
 export const DigitalCardsManager: React.FC = () => {
+  const { user, signOut, isConfigured, isMaster, isAdminOrMaster, role, plan } = useAuth();
+  const [mainView, setMainView] = useState<'cards' | 'users'>('cards');
+  const [cardUserFilter, setCardUserFilter] = useState<string | null>(null);
+  const [cardUserFilterEmail, setCardUserFilterEmail] = useState<string | null>(null);
   const [cards, setCards] = useState<DigitalCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingCard, setEditingCard] = useState<Partial<DigitalCard> | null>(null);
@@ -66,16 +79,40 @@ export const DigitalCardsManager: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'editor' | 'metrics' | 'inquiries'>('editor');
   const [showPreview, setShowPreview] = useState(true);
 
-  // Carrega todos os cartões
+  // Carrega todos os cartões (Supabase DB se autenticado, com fallback local)
   const fetchCards = async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/cards');
-      const data = await res.json();
-      setCards(data);
-      if (data.length > 0 && !editingCard) {
-        setEditingCard(data[0]);
-        loadCardDetails(data[0].id);
+      let cardsData: DigitalCard[] = [];
+
+      if (user) {
+        const client = await initSupabase();
+        if (client) {
+          const { data, error } = await client
+            .from('digital_cards')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+          if (!error && data) {
+            cardsData = data.map(mapDbToDigitalCard);
+          }
+        }
+      }
+
+      // Se não há dados do Supabase ou usuário não autenticado, utiliza API local
+      if (cardsData.length === 0 && !user) {
+        const res = await fetch('/api/cards');
+        if (res.ok) {
+          cardsData = await res.json();
+        }
+      }
+
+      setCards(cardsData);
+      if (cardsData.length > 0 && !editingCard) {
+        setEditingCard(cardsData[0]);
+        loadCardDetails(cardsData[0].id);
+      } else if (cardsData.length === 0 && user && !editingCard) {
+        handleNewCard();
       }
     } catch (err) {
       console.error('Erro ao carregar cartões:', err);
@@ -86,7 +123,7 @@ export const DigitalCardsManager: React.FC = () => {
 
   useEffect(() => {
     fetchCards();
-  }, []);
+  }, [user]);
 
   const loadCardDetails = async (cardId: number) => {
     try {
@@ -100,6 +137,14 @@ export const DigitalCardsManager: React.FC = () => {
       console.error('Erro ao carregar detalhes:', err);
     }
   };
+
+  const displayedCards = cardUserFilter
+    ? cards.filter(
+        (c) =>
+          String(c.userId) === String(cardUserFilter) ||
+          (c as any).user_id === cardUserFilter
+      )
+    : cards;
 
   const handleSelectCard = (c: DigitalCard) => {
     setEditingCard({ ...c });
@@ -184,13 +229,30 @@ export const DigitalCardsManager: React.FC = () => {
     }
   };
 
-  const handleBackgroundImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleBackgroundImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !editingCard) return;
 
     if (file.size > 8 * 1024 * 1024) {
       alert('A imagem selecionada é muito grande. Por favor selecione uma imagem de até 8MB.');
       return;
+    }
+
+    if (user) {
+      try {
+        const assetUrl = await uploadCardAsset(file, user.id, 'backgrounds');
+        setEditingCard({
+          ...editingCard,
+          contentBackgroundImageUrl: assetUrl,
+          contentBackgroundImageFocusX: editingCard.contentBackgroundImageFocusX ?? 50,
+          contentBackgroundImageFocusY: editingCard.contentBackgroundImageFocusY ?? 50,
+          contentBackgroundImageOpacity: editingCard.contentBackgroundImageOpacity ?? 100,
+          appearanceTheme: 'personalizado',
+        });
+        return;
+      } catch (err) {
+        console.warn('Fallback base64 para imagem de fundo:', err);
+      }
     }
 
     const reader = new FileReader();
@@ -208,13 +270,26 @@ export const DigitalCardsManager: React.FC = () => {
     reader.readAsDataURL(file);
   };
 
-  const handleMobileIconUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleMobileIconUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !editingCard) return;
 
     if (file.size > 8 * 1024 * 1024) {
       alert('A imagem selecionada é muito grande. Por favor selecione uma imagem de até 8MB.');
       return;
+    }
+
+    if (user) {
+      try {
+        const assetUrl = await uploadCardAsset(file, user.id, 'icons');
+        setEditingCard({
+          ...editingCard,
+          mobileIconUrl: assetUrl,
+        });
+        return;
+      } catch (err) {
+        console.warn('Fallback base64 para ícone mobile:', err);
+      }
     }
 
     const reader = new FileReader();
@@ -228,13 +303,26 @@ export const DigitalCardsManager: React.FC = () => {
     reader.readAsDataURL(file);
   };
 
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !editingCard) return;
 
     if (file.size > 8 * 1024 * 1024) {
       alert('A imagem selecionada é muito grande. Por favor selecione uma imagem de até 8MB.');
       return;
+    }
+
+    if (user) {
+      try {
+        const assetUrl = await uploadCardAsset(file, user.id, 'photos');
+        setEditingCard({
+          ...editingCard,
+          imageUrl: assetUrl,
+        });
+        return;
+      } catch (err) {
+        console.warn('Fallback base64 para foto de perfil:', err);
+      }
     }
 
     const reader = new FileReader();
@@ -248,13 +336,26 @@ export const DigitalCardsManager: React.FC = () => {
     reader.readAsDataURL(file);
   };
 
-  const handleCompanyLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCompanyLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !editingCard) return;
 
     if (file.size > 8 * 1024 * 1024) {
       alert('A imagem selecionada é muito grande. Por favor selecione uma imagem de até 8MB.');
       return;
+    }
+
+    if (user) {
+      try {
+        const assetUrl = await uploadCardAsset(file, user.id, 'logos');
+        setEditingCard({
+          ...editingCard,
+          companyLogoUrl: assetUrl,
+        });
+        return;
+      } catch (err) {
+        console.warn('Fallback base64 para logotipo:', err);
+      }
     }
 
     const reader = new FileReader();
@@ -308,20 +409,41 @@ export const DigitalCardsManager: React.FC = () => {
     if (!editingCard || isNew || !editingCard.id) return;
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/cards/${editingCard.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(editingCard),
-        });
-        if (res.ok) {
-          const updated = await res.json();
+        let updated: DigitalCard | null = null;
+        if (user) {
+          const client = await initSupabase();
+          if (client) {
+            const dbPayload = mapDigitalCardToDb(editingCard, user.id);
+            const { data, error } = await client
+              .from('digital_cards')
+              .update(dbPayload)
+              .eq('id', editingCard.id)
+              .select()
+              .single();
+            if (!error && data) {
+              updated = mapDbToDigitalCard(data);
+            }
+          }
+        }
+
+        if (!updated) {
+          const res = await fetch(`/api/cards/${editingCard.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(editingCard),
+          });
+          if (res.ok) {
+            updated = await res.json();
+          }
+        }
+
+        if (updated) {
           broadcastCardUpdate(updated);
         }
-        await fetchCards();
       } catch (err) {
         console.error('Erro no auto-save:', err);
       }
-    }, 1000);
+    }, 1200);
     return () => clearTimeout(timer);
   }, [editingCard]);
 
@@ -469,24 +591,54 @@ export const DigitalCardsManager: React.FC = () => {
     setSaveSuccess(false);
 
     try {
-      const url = isNew ? '/api/cards' : `/api/cards/${editingCard.id}`;
-      const method = isNew ? 'POST' : 'PUT';
+      let savedCard: DigitalCard;
 
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editingCard),
-      });
+      if (user) {
+        const client = await initSupabase();
+        if (!client) throw new Error('Supabase não inicializado.');
 
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json.error || 'Erro ao salvar cartão.');
+        const dbPayload = mapDigitalCardToDb(editingCard, user.id);
+
+        if (isNew || !editingCard.id) {
+          const { data, error } = await client
+            .from('digital_cards')
+            .insert([dbPayload])
+            .select()
+            .single();
+          if (error) throw error;
+          savedCard = mapDbToDigitalCard(data);
+        } else {
+          const { data, error } = await client
+            .from('digital_cards')
+            .update(dbPayload)
+            .eq('id', editingCard.id)
+            .select()
+            .single();
+          if (error) throw error;
+          savedCard = mapDbToDigitalCard(data);
+        }
+      } else {
+        // Fallback local API
+        const url = isNew ? '/api/cards' : `/api/cards/${editingCard.id}`;
+        const method = isNew ? 'POST' : 'PUT';
+
+        const res = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(editingCard),
+        });
+
+        const json = await res.json();
+        if (!res.ok) {
+          throw new Error(json.error || 'Erro ao salvar cartão.');
+        }
+        savedCard = json;
       }
 
       setSaveSuccess(true);
       setIsNew(false);
-      setEditingCard(json);
-      broadcastCardUpdate(json);
+      setEditingCard(savedCard);
+      broadcastCardUpdate(savedCard);
       await fetchCards();
     } catch (err: any) {
       setErrorMessage(err.message || 'Erro inesperado.');
@@ -498,6 +650,27 @@ export const DigitalCardsManager: React.FC = () => {
   const toggleCardStatus = async (c: DigitalCard) => {
     const newStatus = c.status === 'ativo' ? 'pausado' : 'ativo';
     try {
+      if (user) {
+        const client = await initSupabase();
+        if (client) {
+          const { data, error } = await client
+            .from('digital_cards')
+            .update({ status: newStatus, updated_at: new Date().toISOString() })
+            .eq('id', c.id)
+            .select()
+            .single();
+          if (!error && data) {
+            const updated = mapDbToDigitalCard(data);
+            if (editingCard?.id === c.id) {
+              setEditingCard(updated);
+            }
+            broadcastCardUpdate(updated);
+            await fetchCards();
+            return;
+          }
+        }
+      }
+
       const res = await fetch(`/api/cards/${c.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -519,9 +692,21 @@ export const DigitalCardsManager: React.FC = () => {
   const handleDeleteCard = async (id: number) => {
     if (!confirm('Tem certeza de que deseja excluir este cartão? O slug será liberado.')) return;
     try {
-      const res = await fetch(`/api/cards/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        await fetchCards();
+      if (user) {
+        const client = await initSupabase();
+        if (client) {
+          const { error } = await client
+            .from('digital_cards')
+            .delete()
+            .eq('id', id);
+          if (error) throw error;
+        }
+      } else {
+        await fetch(`/api/cards/${id}`, { method: 'DELETE' });
+      }
+      await fetchCards();
+      if (editingCard?.id === id) {
+        setEditingCard(null);
       }
     } catch (err) {
       console.error('Erro ao excluir:', err);
@@ -538,15 +723,75 @@ export const DigitalCardsManager: React.FC = () => {
               <Layers size={22} />
             </div>
             <div>
-              <h1 className="text-base sm:text-lg font-black text-slate-900 dark:text-white tracking-tight font-heading">
-                Painel de Cartões Digitais
-              </h1>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Gestão profissional e métricas</p>
+              <div className="flex items-center gap-2">
+                <h1 className="text-base sm:text-lg font-black text-slate-900 dark:text-white tracking-tight font-heading">
+                  Painel de Cartões Digitais
+                </h1>
+                {isMaster && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-black bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/40 shadow-xs">
+                    <Crown size={12} className="text-amber-500" />
+                    Master
+                  </span>
+                )}
+                {!isMaster && role === 'admin' && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30">
+                    <Shield size={12} className="text-blue-500" />
+                    Admin
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {user ? `Conectado como ${user.email}` : 'Gestão profissional e métricas'}
+              </p>
             </div>
           </div>
 
+          {/* Navegação entre Cartões e Gestão de Usuários (Master & Admin) */}
+          {isAdminOrMaster && (
+            <div className="hidden md:flex items-center bg-slate-100 dark:bg-slate-900/70 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
+              <button
+                type="button"
+                onClick={() => setMainView('cards')}
+                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  mainView === 'cards'
+                    ? 'bg-white dark:bg-slate-800 text-sky-700 dark:text-sky-300 shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <Layers size={14} />
+                <span>Cartões Digitais ({cards.length})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setMainView('users')}
+                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  mainView === 'users'
+                    ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <Users size={14} />
+                <span>Gestão de Usuários</span>
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-amber-200 text-amber-900 dark:bg-amber-900 dark:text-amber-100 font-extrabold">
+                  Master
+                </span>
+              </button>
+            </div>
+          )}
+
           <div className="flex items-center gap-2">
+            <a
+              href="/"
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-colors shadow-xs"
+              title="Ir para a Página Inicial / Landing Page"
+            >
+              <Home size={15} className="text-sky-600 dark:text-sky-400" />
+              <span className="hidden sm:inline">Página Inicial</span>
+            </a>
+
             <ThemeToggle variant="header" />
+
             <button
               type="button"
               onClick={handleNewCard}
@@ -555,86 +800,189 @@ export const DigitalCardsManager: React.FC = () => {
               <Plus size={16} />
               <span className="hidden sm:inline">Novo Cartão</span>
             </button>
+
+            {user && (
+              <button
+                type="button"
+                onClick={signOut}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 rounded-xl shadow-xs transition-colors cursor-pointer"
+                title="Sair da Conta (Logout)"
+              >
+                <LogOut size={15} />
+                <span className="hidden md:inline">Sair</span>
+              </button>
+            )}
           </div>
         </div>
       </header>
 
+      {/* Navegação Mobile para Master & Admin */}
+      {isAdminOrMaster && (
+        <div className="md:hidden max-w-7xl mx-auto px-4 pt-3 flex gap-2">
+          <button
+            type="button"
+            onClick={() => setMainView('cards')}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold cursor-pointer ${
+              mainView === 'cards'
+                ? 'bg-sky-600 text-white shadow-xs'
+                : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+            }`}
+          >
+            <Layers size={14} />
+            <span>Cartões ({cards.length})</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setMainView('users')}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold cursor-pointer ${
+              mainView === 'users'
+                ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-xs'
+                : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+            }`}
+          >
+            <Crown size={14} />
+            <span>Usuários & Planos</span>
+          </button>
+        </div>
+      )}
+
       {/* Main Container */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
-        {/* Lista Horizontal de Cartões */}
-        <div className="mb-6">
-          <div className="flex items-center gap-2 mb-3">
-            <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              Seus Cartões Ativos ({cards.length})
-            </h2>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-            {cards.map((c) => {
-              const isSelected = editingCard?.id === c.id && !isNew;
-              return (
-                <div
-                  key={c.id}
-                  onClick={() => handleSelectCard(c)}
-                  className={`p-3.5 rounded-2xl border transition-all cursor-pointer bg-white dark:bg-slate-800 relative ${
-                    isSelected
-                      ? 'border-sky-600 ring-2 ring-sky-600/20 shadow-md'
-                      : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 shadow-xs'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden shrink-0 border dark:border-slate-600">
-                      {c.imageUrl ? (
-                        <img src={c.imageUrl} alt={c.name} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center font-bold text-slate-500 dark:text-slate-400 text-xs">
-                          {c.name.slice(0, 2).toUpperCase()}
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-bold text-xs sm:text-sm text-slate-900 dark:text-slate-100 truncate">
-                        {c.name}
-                      </div>
-                      <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
-                        /cartao/{c.slug}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between text-xs">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleCardStatus(c);
-                      }}
-                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                        c.status === 'ativo'
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : 'bg-amber-100 text-amber-800'
-                      }`}
-                    >
-                      {c.status === 'ativo' ? <Eye size={11} /> : <EyeOff size={11} />}
-                      <span>{c.status === 'ativo' ? 'Ativo' : 'Pausado'}</span>
-                    </button>
-
-                    <a
-                      href={`/cartao/${c.slug}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={(e) => handleOpenPublicPage(e, c.slug)}
-                      className="text-sky-600 hover:text-sky-700 flex items-center gap-1 font-semibold text-[11px]"
-                    >
-                      <span>Abrir</span>
-                      <ExternalLink size={12} />
-                    </a>
-                  </div>
+        {mainView === 'users' && isAdminOrMaster ? (
+          <AdminUsersManager
+            onSelectUserCards={(userId, email) => {
+              setCardUserFilter(userId);
+              setCardUserFilterEmail(email);
+              setMainView('cards');
+            }}
+            onBackToCards={() => setMainView('cards')}
+          />
+        ) : (
+          <>
+            {/* Banner de filtro de usuário pelo Master se ativo */}
+            {cardUserFilter && (
+              <div className="mb-5 p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 flex items-center justify-between gap-3 text-xs font-semibold text-amber-900 dark:text-amber-200">
+                <div className="flex items-center gap-2">
+                  <Crown size={16} className="text-amber-600 dark:text-amber-400 shrink-0" />
+                  <span>
+                    Filtro Master ativo: exibindo cartões vinculados a <strong>{cardUserFilterEmail}</strong>
+                  </span>
                 </div>
-              );
-            })}
-          </div>
-        </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCardUserFilter(null);
+                    setCardUserFilterEmail(null);
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300 hover:bg-amber-100 transition shadow-xs cursor-pointer"
+                >
+                  Ver Todos os Cartões ({cards.length})
+                </button>
+              </div>
+            )}
+
+            {/* Lista Horizontal de Cartões */}
+            <div className="mb-6">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  {cardUserFilter
+                    ? `Cartões de ${cardUserFilterEmail} (${displayedCards.length})`
+                    : isMaster
+                    ? `Todos os Cartões da Plataforma (${displayedCards.length})`
+                    : `Seus Cartões Ativos (${displayedCards.length})`}
+                </h2>
+
+                {isMaster && !cardUserFilter && (
+                  <button
+                    type="button"
+                    onClick={() => setMainView('users')}
+                    className="text-xs font-bold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <Users size={13} />
+                    <span>Gerenciar Usuários & Planos</span>
+                  </button>
+                )}
+              </div>
+
+              {displayedCards.length === 0 ? (
+                <div className="p-8 text-center bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 text-slate-500 text-xs">
+                  Nenhum cartão cadastrado nesta visualização.{' '}
+                  <button
+                    type="button"
+                    onClick={handleNewCard}
+                    className="text-sky-600 hover:underline font-bold ml-1 cursor-pointer"
+                  >
+                    Clique aqui para criar um novo cartão.
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                  {displayedCards.map((c) => {
+                    const isSelected = editingCard?.id === c.id && !isNew;
+                    return (
+                      <div
+                        key={c.id}
+                        onClick={() => handleSelectCard(c)}
+                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer bg-white dark:bg-slate-800 relative ${
+                          isSelected
+                            ? 'border-sky-600 ring-2 ring-sky-600/20 shadow-md'
+                            : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 shadow-xs'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-11 h-11 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden shrink-0 border dark:border-slate-600">
+                            {c.imageUrl ? (
+                              <img src={c.imageUrl} alt={c.name} className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center font-bold text-slate-500 dark:text-slate-400 text-xs">
+                                {c.name.slice(0, 2).toUpperCase()}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-bold text-xs sm:text-sm text-slate-900 dark:text-slate-100 truncate">
+                              {c.name}
+                            </div>
+                            <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                              /cartao/{c.slug}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between text-xs">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleCardStatus(c);
+                            }}
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              c.status === 'ativo'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-amber-100 text-amber-800'
+                            }`}
+                          >
+                            {c.status === 'ativo' ? <Eye size={11} /> : <EyeOff size={11} />}
+                            <span>{c.status === 'ativo' ? 'Ativo' : 'Pausado'}</span>
+                          </button>
+
+                          <a
+                            href={`/cartao/${c.slug}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            onClick={(e) => handleOpenPublicPage(e, c.slug)}
+                            className="text-sky-600 hover:text-sky-700 flex items-center gap-1 font-semibold text-[11px]"
+                          >
+                            <span>Abrir</span>
+                            <ExternalLink size={12} />
+                          </a>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
 
         {/* Área de Edição e Pré-Visualização */}
         {editingCard && (
@@ -4067,6 +4415,8 @@ export const DigitalCardsManager: React.FC = () => {
               </div>
             </div>
           </div>
+        )}
+          </>
         )}
       </div>
     </div>
