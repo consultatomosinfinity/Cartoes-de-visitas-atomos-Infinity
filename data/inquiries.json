@@ -1,0 +1,14 @@
+[
+  {
+    "id": 1789487163313,
+    "cardId": 1,
+    "name": "Ana Costa",
+    "email": "ana@teste.com",
+    "whatsappPhone": "",
+    "message": "Gostaria de agendar uma reunião sobre o projeto.",
+    "status": "novo",
+    "consentAt": "2026-09-15T15:46:03.313Z",
+    "createdAt": "2026-09-15T15:46:03.313Z",
+    "updatedAt": "2026-09-15T15:46:03.313Z"
+  }
+]

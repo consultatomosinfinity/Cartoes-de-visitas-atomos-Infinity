@@ -1,0 +1,8 @@
+{
+  "name": "Cartão Digital - Átomos Infinity",
+  "description": "Sistema completo de emissão e gerenciamento de cartões digitais profissionais com perfil público, QR Code personalizável, vCard, atendente virtual e métricas anônimas.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

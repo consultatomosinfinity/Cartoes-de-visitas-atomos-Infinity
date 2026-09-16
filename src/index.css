@@ -1,0 +1,184 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  body {
+    font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  }
+
+  h1, h2, h3, h4, .font-heading {
+    font-family: 'Manrope', 'DM Sans', sans-serif;
+  }
+
+  html.dark {
+    color-scheme: dark;
+  }
+}
+
+/* Transições fluidas especificadas pelo padrão */
+.card-transition {
+  transition: all 160ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* Suporte abrangente ao Modo Escuro (Dia / Noite) no Painel Administrativo */
+html.dark body {
+  background-color: #0b1120;
+  color: #f8fafc;
+}
+
+/* Painéis, botões, caixas e recipientes brancos ficam escuros no painel (exceto mockup do celular e cartão público) */
+html.dark .bg-white:not(#phone-mockup-frame *):not(#public-card-container *):not(.keep-white),
+html.dark header.bg-white {
+  background-color: #1e293b !important;
+  border-color: #334155 !important;
+}
+
+/* Caixas de destaque cinza claro/ardósia */
+html.dark .bg-slate-50:not(#phone-mockup-frame *):not(#public-card-container *),
+html.dark [class*="bg-slate-50"]:not(#phone-mockup-frame *):not(#public-card-container *) {
+  background-color: #162032 !important;
+  border-color: #334155 !important;
+}
+
+html.dark .bg-slate-100:not(#phone-mockup-frame *):not(#public-card-container *),
+html.dark [class*="bg-slate-100"]:not(#phone-mockup-frame *):not(#public-card-container *) {
+  background-color: #1e293b !important;
+  border-color: #334155 !important;
+}
+
+/* Efeitos hover em modo escuro */
+html.dark .hover\:bg-slate-50:hover:not(#phone-mockup-frame *):not(#public-card-container *),
+html.dark .hover\:bg-slate-100:hover:not(#phone-mockup-frame *):not(#public-card-container *),
+html.dark [class*="hover:bg-slate-100"]:hover:not(#phone-mockup-frame *):not(#public-card-container *),
+html.dark [class*="hover:bg-slate-50"]:hover:not(#phone-mockup-frame *):not(#public-card-container *) {
+  background-color: #334155 !important;
+}
+
+/* Bordas sutis no modo escuro */
+html.dark .border-slate-200:not(#phone-mockup-frame *):not(#public-card-container *),
+html.dark .border-slate-100:not(#phone-mockup-frame *):not(#public-card-container *),
+html.dark .border-slate-300:not(#phone-mockup-frame *):not(#public-card-container *),
+html.dark .border-sky-100:not(#phone-mockup-frame *):not(#public-card-container *),
+html.dark .border-sky-200:not(#phone-mockup-frame *):not(#public-card-container *) {
+  border-color: #334155 !important;
+}
+
+/* Evitar que gradientes claros permaneçam ativos em modo escuro */
+html.dark [class*="from-sky-50"]:not(#phone-mockup-frame *):not(#public-card-container *),
+html.dark [class*="bg-gradient"]:not(#phone-mockup-frame *):not(#public-card-container *) {
+  background-image: none !important;
+  background-color: #162032 !important;
+}
+
+/* Contraste e legibilidade impecável de textos em modo escuro */
+html.dark .text-slate-900:not(#phone-mockup-frame *):not(#public-card-container *) {
+  color: #f8fafc !important;
+}
+
+html.dark .text-slate-800:not(#phone-mockup-frame *):not(#public-card-container *) {
+  color: #f1f5f9 !important;
+}
+
+html.dark .text-slate-700:not(#phone-mockup-frame *):not(#public-card-container *) {
+  color: #e2e8f0 !important;
+}
+
+html.dark .text-slate-600:not(#phone-mockup-frame *):not(#public-card-container *) {
+  color: #cbd5e1 !important;
+}
+
+html.dark .text-slate-500:not(#phone-mockup-frame *):not(#public-card-container *) {
+  color: #94a3b8 !important;
+}
+
+html.dark .text-slate-400:not(#phone-mockup-frame *):not(#public-card-container *) {
+  color: #94a3b8 !important;
+}
+
+/* Campos de formulário do painel no Modo Escuro (excluindo a simulação do mockup móvel e cartão público) */
+html.dark input:not([type="color"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]):not(#phone-mockup-frame *):not(#public-card-container *),
+html.dark textarea:not(#phone-mockup-frame *):not(#public-card-container *),
+html.dark select:not(#phone-mockup-frame *):not(#public-card-container *) {
+  background-color: #0f172a !important;
+  color: #f8fafc !important;
+  border-color: #334155 !important;
+}
+
+html.dark input::placeholder:not(#phone-mockup-frame *):not(#public-card-container *),
+html.dark textarea::placeholder:not(#phone-mockup-frame *):not(#public-card-container *) {
+  color: #64748b !important;
+}
+
+html.dark .disabled\:bg-slate-100:disabled {
+  background-color: #162032 !important;
+  color: #64748b !important;
+}
+
+/* Regras de Atendente Virtual do Site */
+[id^="jotform-agent"], [class^="jotform-agent"],
+[id*="jfAgent"], [class*="jfAgent"],
+[id*="jf-agent"], [class*="jf-agent"] {
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  z-index: 999999 !important;
+}
+
+body.card-hide-site-agent [id^="jotform-agent"],
+body.card-hide-site-agent [class^="jotform-agent"],
+body.card-hide-site-agent [id*="jfAgent"],
+body.card-hide-site-agent [class*="jfAgent"],
+body.card-hide-site-agent [id*="jf-agent"],
+body.card-hide-site-agent [class*="jf-agent"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Efeitos de brilho (glow) para o botão do Atendente Virtual de IA */
+@keyframes ai-glow-suave {
+  0%, 100% {
+    box-shadow: 0 0 10px rgba(124, 58, 237, 0.3), 0 2px 6px rgba(0, 0, 0, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 18px rgba(147, 51, 234, 0.5), 0 2px 10px rgba(124, 58, 237, 0.25);
+  }
+}
+
+@keyframes ai-glow-medio {
+  0%, 100% {
+    box-shadow: 0 0 14px rgba(124, 58, 237, 0.45), 0 2px 8px rgba(0, 0, 0, 0.12);
+    filter: drop-shadow(0 0 2px rgba(139, 92, 246, 0.35));
+  }
+  50% {
+    box-shadow: 0 0 26px rgba(147, 51, 234, 0.75), 0 3px 12px rgba(124, 58, 237, 0.35);
+    filter: drop-shadow(0 0 6px rgba(168, 85, 247, 0.6));
+  }
+}
+
+@keyframes ai-glow-intenso {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(147, 51, 234, 0.65), 0 3px 10px rgba(0, 0, 0, 0.15);
+    filter: drop-shadow(0 0 4px rgba(168, 85, 247, 0.6));
+  }
+  50% {
+    box-shadow: 0 0 36px rgba(168, 85, 247, 0.95), 0 4px 18px rgba(147, 51, 234, 0.5);
+    filter: drop-shadow(0 0 10px rgba(192, 132, 252, 0.85));
+  }
+}
+
+.ai-button-glow,
+.ai-button-glow-medio {
+  animation: ai-glow-medio 2.4s ease-in-out infinite;
+}
+
+.ai-button-glow-suave {
+  animation: ai-glow-suave 2.8s ease-in-out infinite;
+}
+
+.ai-button-glow-intenso {
+  animation: ai-glow-intenso 1.9s ease-in-out infinite;
+}
+

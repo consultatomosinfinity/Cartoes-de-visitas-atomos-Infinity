@@ -1,0 +1,809 @@
+import React, { useState } from 'react';
+import {
+  Download,
+  Share2,
+  Bot,
+  Mail,
+  Phone,
+  MessageCircle,
+  MapPin,
+  Globe,
+  Instagram,
+  Linkedin,
+  Facebook,
+  Youtube,
+  Smartphone,
+  Wifi,
+  Battery,
+  ChevronDown,
+  Sparkles,
+  Send,
+} from 'lucide-react';
+import { DigitalCard } from '../types.ts';
+import { getContrastTextColor, isConfiguredLink, hexToRgba, getCardContentContrastColors } from '../../shared/digital-card-appearance.ts';
+import { parseAiAgentInput, getAiAgentButtonGlowClass, getAiAgentButtonPaddingY } from '../../shared/digital-card-ai-agent.ts';
+import { DigitalCardDualPorthole } from './DigitalCardDualPorthole.tsx';
+import { DigitalCardQrCode } from './DigitalCardQrCode.tsx';
+
+export type DeviceModel =
+  | 'iphone-12'
+  | 'iphone-13'
+  | 'iphone-14-pro'
+  | 'iphone-14-pro-max'
+  | 'samsung-a12'
+  | 'samsung-s26-ultra';
+
+interface DeviceConfig {
+  id: DeviceModel;
+  name: string;
+  brand: 'Apple' | 'Samsung';
+  screenSize: string;
+  chassisWidth: string; // Tailwind max-w class
+  outerRadius: string;
+  innerRadius: string;
+  borderWidth: string;
+  borderColor: string;
+  cutoutType: 'notch-wide' | 'notch-compact' | 'dynamic-island' | 'dynamic-island-large' | 'infinity-v' | 'infinity-o';
+  time: string;
+  hasSideButtons?: boolean;
+  isBoxy?: boolean;
+}
+
+const DEVICES: DeviceConfig[] = [
+  {
+    id: 'iphone-12',
+    name: 'iPhone 12',
+    brand: 'Apple',
+    screenSize: '6.1"',
+    chassisWidth: 'max-w-[345px]',
+    outerRadius: 'rounded-[2.4rem]',
+    innerRadius: 'rounded-[1.75rem]',
+    borderWidth: 'border-[8px]',
+    borderColor: 'border-slate-800 bg-slate-900',
+    cutoutType: 'notch-wide',
+    time: '09:41',
+  },
+  {
+    id: 'iphone-13',
+    name: 'iPhone 13 / 13 Pro',
+    brand: 'Apple',
+    screenSize: '6.1"',
+    chassisWidth: 'max-w-[350px]',
+    outerRadius: 'rounded-[2.6rem]',
+    innerRadius: 'rounded-[1.9rem]',
+    borderWidth: 'border-[8px]',
+    borderColor: 'border-slate-800 bg-slate-900',
+    cutoutType: 'notch-compact',
+    time: '09:41',
+  },
+  {
+    id: 'iphone-14-pro',
+    name: 'iPhone 14 Pro',
+    brand: 'Apple',
+    screenSize: '6.1"',
+    chassisWidth: 'max-w-[355px]',
+    outerRadius: 'rounded-[2.8rem]',
+    innerRadius: 'rounded-[2.1rem]',
+    borderWidth: 'border-[7px]',
+    borderColor: 'border-slate-900 bg-slate-950',
+    cutoutType: 'dynamic-island',
+    time: '09:41',
+  },
+  {
+    id: 'iphone-14-pro-max',
+    name: 'iPhone 14 Pro Max',
+    brand: 'Apple',
+    screenSize: '6.7"',
+    chassisWidth: 'max-w-[385px]',
+    outerRadius: 'rounded-[3rem]',
+    innerRadius: 'rounded-[2.3rem]',
+    borderWidth: 'border-[8px]',
+    borderColor: 'border-slate-900 bg-slate-950',
+    cutoutType: 'dynamic-island-large',
+    time: '09:41',
+  },
+  {
+    id: 'samsung-a12',
+    name: 'Galaxy A12',
+    brand: 'Samsung',
+    screenSize: '6.5"',
+    chassisWidth: 'max-w-[355px]',
+    outerRadius: 'rounded-[2.1rem]',
+    innerRadius: 'rounded-[1.5rem]',
+    borderWidth: 'border-[9px]',
+    borderColor: 'border-zinc-700 bg-zinc-800',
+    cutoutType: 'infinity-v',
+    time: '12:45',
+  },
+  {
+    id: 'samsung-s26-ultra',
+    name: 'Galaxy S26 Ultra',
+    brand: 'Samsung',
+    screenSize: '6.9"',
+    chassisWidth: 'max-w-[385px]',
+    outerRadius: 'rounded-[0.9rem]', // Formato icônico quase retangular da linha Note/Ultra
+    innerRadius: 'rounded-[0.6rem]',
+    borderWidth: 'border-[5px]',
+    borderColor: 'border-zinc-900 bg-zinc-950',
+    cutoutType: 'infinity-o',
+    time: '10:08',
+    isBoxy: true,
+  },
+];
+
+interface DigitalCardLivePreviewProps {
+  card: Partial<DigitalCard>;
+}
+
+export const DigitalCardLivePreview: React.FC<DigitalCardLivePreviewProps> = ({ card }) => {
+  const [selectedDeviceId, setSelectedDeviceId] = useState<DeviceModel>('iphone-14-pro');
+  const [brandFilter, setBrandFilter] = useState<'all' | 'Apple' | 'Samsung'>('all');
+  const [isSelectorOpen, setIsSelectorOpen] = useState(false);
+
+  const headerTextColor = getContrastTextColor(card.backgroundColor || '#12375B');
+  const actionButtonTextColor = getContrastTextColor(card.buttonColor || '#1A7FBE');
+
+  // Cores de contraste garantido para a área de conteúdo (formulário, consentimento, rótulos e rodapé)
+  const contentContrast = getCardContentContrastColors({
+    contentColor: card.contentColor,
+    contentOpacity: card.contentOpacity,
+    bodyColor: card.bodyColor,
+    supportTextColor: card.supportTextColor,
+    inquiryTextColor: card.inquiryTextColor,
+  });
+
+  // Cores de textos personalizadas por seção para manter legibilidade máxima
+  const summaryTextColor = card.summaryTextColor || (contentContrast.isDarkBg ? '#F1F5F9' : (card.supportTextColor || '#475569'));
+  const qrTitleColor = card.qrCodeTextColor || (card.qrCodeSectionBgColor ? getContrastTextColor(card.qrCodeSectionBgColor) : (contentContrast.isDarkBg ? '#FFFFFF' : '#1E293B'));
+
+  const getFontFamily = (font: string) => {
+    switch (font) {
+      case 'serif': return 'ui-serif, Georgia, Cambria, "Times New Roman", Times, serif';
+      case 'mono': return 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace';
+      case 'lato': return '"Lato", sans-serif';
+      case 'poppins': return '"Poppins", sans-serif';
+      case 'roboto': return '"Roboto", sans-serif';
+      default: return 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+    }
+  };
+
+  // Controles e canais condicionais baseados no preenchimento de endereços/links
+  const hasAiAgent = isConfiguredLink(card.aiAgentUrl);
+  const aiAgentInfo = hasAiAgent ? parseAiAgentInput(card.aiAgentUrl) : null;
+
+  const hasWhatsapp = isConfiguredLink(card.whatsappPhone);
+  const hasPhone = isConfiguredLink(card.phone);
+  const hasEmail = isConfiguredLink(card.email);
+  const hasWebsite = isConfiguredLink(card.websiteUrl);
+  const hasAddress = Boolean(
+    (card.address && card.address.trim()) ||
+    (card.city && card.city.trim()) ||
+    isConfiguredLink(card.googleMapsUrl)
+  );
+  const hasContacts = hasWhatsapp || hasPhone || hasEmail || hasWebsite || hasAddress;
+
+  const hasInstagram = isConfiguredLink(card.instagramUrl);
+  const hasLinkedin = isConfiguredLink(card.linkedinUrl);
+  const hasFacebook = isConfiguredLink(card.facebookUrl);
+  const hasYoutube = isConfiguredLink(card.youtubeUrl);
+  const hasSocial = hasInstagram || hasLinkedin || hasFacebook || hasYoutube;
+
+  const hasSummary = Boolean(card.summary && card.summary.trim());
+  const hasCta = Boolean(card.ctaLabel && card.ctaLabel.trim() && isConfiguredLink(card.ctaUrl));
+
+  const currentDevice = DEVICES.find((d) => d.id === selectedDeviceId) || DEVICES[2];
+
+  const filteredDevices =
+    brandFilter === 'all'
+      ? DEVICES
+      : DEVICES.filter((d) => d.brand === brandFilter);
+
+  return (
+    <div className="w-full flex flex-col items-center">
+      {/* Barra de Seleção de Dispositivo Recolhível */}
+      <div className="w-full mb-4 bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden transition-all duration-200">
+        {/* Cabeçalho do seletor (sempre visível e clicável para expandir/recolher) */}
+        <button
+          type="button"
+          onClick={() => setIsSelectorOpen(!isSelectorOpen)}
+          className="w-full flex items-center justify-between p-3 bg-white hover:bg-slate-50/80 transition-colors text-left cursor-pointer"
+          aria-expanded={isSelectorOpen}
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-7 h-7 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center shrink-0 border border-sky-100">
+              <Smartphone size={15} />
+            </div>
+            <div className="flex items-center gap-1.5 truncate">
+              <span className="text-xs font-semibold text-slate-500">Dispositivo:</span>
+              <span className="text-xs font-bold text-slate-900 truncate">
+                {currentDevice.name}
+              </span>
+              <span className="text-[10px] font-medium text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-md shrink-0">
+                {currentDevice.brand} · {currentDevice.screenSize}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1 text-slate-400 hover:text-slate-600 text-xs font-semibold shrink-0 ml-2">
+            <span className="text-[11px] text-sky-600 font-bold hidden sm:inline">
+              {isSelectorOpen ? 'Ocultar modelos' : 'Alterar modelo'}
+            </span>
+            <div className="w-6 h-6 rounded-md bg-slate-100 flex items-center justify-center text-slate-600">
+              {isSelectorOpen ? <ChevronDown size={14} className="rotate-180 transition-transform duration-200" /> : <ChevronDown size={14} className="transition-transform duration-200" />}
+            </div>
+          </div>
+        </button>
+
+        {/* Conteúdo Recolhível */}
+        {isSelectorOpen && (
+          <div className="p-3 pt-1 border-t border-slate-100 bg-slate-50/50 space-y-2.5 animate-in fade-in duration-150">
+            {/* Filtro por Marca */}
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                Escolha o Mockup
+              </span>
+              <div className="flex items-center bg-slate-200/70 p-0.5 rounded-lg text-[11px] font-semibold text-slate-600">
+                <button
+                  type="button"
+                  onClick={() => setBrandFilter('all')}
+                  className={`px-2 py-0.5 rounded-md transition-all cursor-pointer ${
+                    brandFilter === 'all' ? 'bg-white text-slate-900 shadow-xs' : 'hover:text-slate-900'
+                  }`}
+                >
+                  Todos
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBrandFilter('Apple')}
+                  className={`px-2 py-0.5 rounded-md transition-all cursor-pointer ${
+                    brandFilter === 'Apple' ? 'bg-white text-slate-900 shadow-xs' : 'hover:text-slate-900'
+                  }`}
+                >
+                  Apple
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBrandFilter('Samsung')}
+                  className={`px-2 py-0.5 rounded-md transition-all cursor-pointer ${
+                    brandFilter === 'Samsung' ? 'bg-white text-slate-900 shadow-xs' : 'hover:text-slate-900'
+                  }`}
+                >
+                  Samsung
+                </button>
+              </div>
+            </div>
+
+            {/* Grid de Modelos */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+              {filteredDevices.map((dev) => {
+                const isSelected = dev.id === selectedDeviceId;
+                return (
+                  <button
+                    key={dev.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedDeviceId(dev.id);
+                      setIsSelectorOpen(false); // Recolhe automaticamente após escolher para economizar espaço
+                    }}
+                    className={`flex flex-col items-start p-2 rounded-xl border text-left transition-all cursor-pointer ${
+                      isSelected
+                        ? 'border-sky-600 bg-sky-50 text-sky-900 ring-2 ring-sky-600/20 font-bold shadow-xs'
+                        : 'border-slate-200 bg-white hover:bg-slate-100/80 text-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between w-full">
+                      <span className="text-xs truncate">{dev.name}</span>
+                      {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-sky-600" />}
+                    </div>
+                    <span className="text-[10px] text-slate-400 font-normal">
+                      {dev.brand} · {dev.screenSize}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* CHASSIS DO SMARTPHONE COM MOCKUP REALISTA */}
+      <div className="relative w-full flex justify-center py-2 select-none">
+        {/* Simulação de Botões Físicos Laterais no Chassis */}
+        <div
+          id="phone-mockup-frame"
+          className={`relative w-full ${currentDevice.chassisWidth} ${currentDevice.outerRadius} p-2.5 sm:p-3 shadow-2xl ${currentDevice.borderWidth} ${currentDevice.borderColor} transition-all duration-300`}
+        >
+          {/* Botão de volume / power esquerdo decorativo */}
+          <div className="absolute -left-[11px] top-24 w-[3px] h-9 bg-slate-700 rounded-l-sm" />
+          <div className="absolute -left-[11px] top-36 w-[3px] h-9 bg-slate-700 rounded-l-sm" />
+          {/* Botão lateral direito decorativo */}
+          <div className="absolute -right-[11px] top-28 w-[3px] h-12 bg-slate-700 rounded-r-sm" />
+
+          {/* STATUS BAR E RECORTE DO DISPOSITIVO (NOTCH / DYNAMIC ISLAND / PUNCH-HOLE) */}
+          <div className="relative w-full z-20 mb-1 px-3 pt-1 flex items-center justify-between text-[11px] font-bold tracking-tight text-slate-800">
+            {/* Hora */}
+            <span className="w-12 text-left">{currentDevice.time}</span>
+
+            {/* Recorte Específico do Modelo */}
+            <div className="flex-1 flex justify-center">
+              {/* iPhone 12: Notch clássico largo */}
+              {currentDevice.cutoutType === 'notch-wide' && (
+                <div className="w-36 h-4 bg-slate-900 rounded-b-xl flex items-center justify-center -mt-1 shadow-xs">
+                  <div className="w-12 h-1 bg-slate-800 rounded-full" />
+                </div>
+              )}
+
+              {/* iPhone 13: Notch compacto */}
+              {currentDevice.cutoutType === 'notch-compact' && (
+                <div className="w-28 h-4 bg-slate-900 rounded-b-xl flex items-center justify-center -mt-1 shadow-xs">
+                  <div className="w-9 h-1 bg-slate-800 rounded-full" />
+                </div>
+              )}
+
+              {/* iPhone 14 Pro: Dynamic Island */}
+              {currentDevice.cutoutType === 'dynamic-island' && (
+                <div className="w-24 h-5 bg-black rounded-full flex items-center justify-between px-2 text-[8px] text-white shadow-md">
+                  <div className="w-2.5 h-2.5 rounded-full bg-slate-900 ring-1 ring-slate-800" />
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                </div>
+              )}
+
+              {/* iPhone 14 Pro Max: Dynamic Island expandida */}
+              {currentDevice.cutoutType === 'dynamic-island-large' && (
+                <div className="w-28 h-5.5 bg-black rounded-full flex items-center justify-between px-2.5 text-[8px] text-white shadow-md">
+                  <div className="w-2.5 h-2.5 rounded-full bg-slate-900 ring-1 ring-slate-800" />
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                </div>
+              )}
+
+              {/* Samsung Galaxy A12: Infinity-V (Waterdrop notch) */}
+              {currentDevice.cutoutType === 'infinity-v' && (
+                <div className="w-5 h-3.5 bg-zinc-800 rounded-b-full -mt-1 flex items-center justify-center">
+                  <div className="w-2 h-2 rounded-full bg-zinc-950" />
+                </div>
+              )}
+
+              {/* Samsung Galaxy S26 Ultra: Infinity-O (Câmera centralizada minúscula) */}
+              {currentDevice.cutoutType === 'infinity-o' && (
+                <div className="w-3 h-3 rounded-full bg-black ring-1 ring-zinc-800 flex items-center justify-center shadow-xs">
+                  <div className="w-1 h-1 rounded-full bg-blue-900" />
+                </div>
+              )}
+            </div>
+
+            {/* Ícones de Rede e Bateria */}
+            <div className="w-12 flex items-center justify-end gap-1 text-slate-700">
+              <Wifi size={12} />
+              <Battery size={13} />
+            </div>
+          </div>
+
+          {/* SIMULAÇÃO DE ABA DO NAVEGADOR MOBILE (com Favicon Dinâmico do Cartão) */}
+          <div className="mx-1 mb-1.5 px-2.5 py-1 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xs rounded-xl border border-slate-200/80 dark:border-slate-800/80 flex items-center gap-2 shadow-xs">
+            <img
+              src={card.mobileIconUrl || card.companyLogoUrl || card.imageUrl || '/icon-192.png'}
+              alt="Favicon"
+              referrerPolicy="no-referrer"
+              className="w-3.5 h-3.5 rounded-xs object-contain shrink-0 bg-white border border-slate-200/60"
+            />
+            <span className="text-[10px] font-semibold text-slate-700 dark:text-slate-200 truncate flex-1">
+              {card.mobileAppName || (card.brandName ? `${card.name || 'Cartão'} | ${card.brandName}` : card.name || 'Cartão Digital')}
+            </span>
+            <span className="text-[9px] text-slate-400 font-mono shrink-0">cartao/{card.slug || 'perfil'}</span>
+          </div>
+
+          {/* TELA INTERNA DO DISPOSITIVO */}
+          <div
+            className={`w-full ${currentDevice.innerRadius} overflow-y-auto max-h-[620px] shadow-inner text-slate-800 scrollbar-thin flex flex-col relative`}
+            style={{ backgroundColor: card.bodyColor || '#EAF1F7', fontFamily: getFontFamily(card.fontFamily || 'sans') }}
+          >
+            {/* Container do Cartão com suporte a Imagem de Fundo (se configurada) */}
+            <div className="relative w-full flex flex-col min-h-full">
+              {/* CAMADA DE IMAGEM DE FUNDO DO CARTÃO (atrás de tudo no cartão) */}
+              {card.contentBackgroundImageUrl && (
+                <div
+                  className="absolute inset-0 z-0 pointer-events-none overflow-hidden"
+                  style={{
+                    opacity: (card.contentBackgroundImageOpacity ?? 100) / 100,
+                  }}
+                >
+                  <img
+                    src={card.contentBackgroundImageUrl}
+                    alt="Imagem de fundo do cartão"
+                    referrerPolicy="no-referrer"
+                    className="w-full h-full object-contain transition-transform"
+                    style={{
+                      objectPosition: `${card.contentBackgroundImageFocusX ?? 50}% ${card.contentBackgroundImageFocusY ?? 50}%`,
+                      transform: `scale(${(card.contentBackgroundImageScale ?? 100) / 100})`,
+                      transformOrigin: `${card.contentBackgroundImageFocusX ?? 50}% ${card.contentBackgroundImageFocusY ?? 50}%`,
+                    }}
+                  />
+                </div>
+              )}
+
+              {/* CAMADA DE CONTEÚDO DO CARTÃO (com cor e transparência alpha) */}
+              <div
+                className="relative z-10 w-full flex flex-col flex-1 min-h-full"
+                style={{
+                  backgroundColor: hexToRgba(card.contentColor || '#FFFFFF', (card.contentOpacity ?? 100) / 100),
+                }}
+              >
+                {/* Header com Dual Porthole */}
+                <div
+                  className="pt-5 pb-4 px-4 text-center relative"
+                  style={{
+                    backgroundColor: hexToRgba(card.backgroundColor || '#12375B', (card.headerOpacity ?? 100) / 100),
+                    color: headerTextColor,
+                  }}
+                >
+                <DigitalCardDualPorthole
+                  imageUrl={card.imageUrl}
+                  name={card.name || 'Nome'}
+                  companyLogoUrl={card.companyLogoUrl}
+                  brandName={card.brandName}
+                  frameScale={card.frameScale || 97}
+                  companyLogoFocusX={card.companyLogoFocusX || 56}
+                  companyLogoFocusY={card.companyLogoFocusY || 67}
+                  borderColor={card.contentColor || '#FFFFFF'}
+                />
+
+                <h1 className="text-base sm:text-lg font-black tracking-tight uppercase font-heading">
+                  {card.brandName || card.name || 'Sua Empresa'}
+                </h1>
+                <p className="text-xs sm:text-sm font-semibold opacity-95">
+                  {card.name || 'Seu Nome Completo'}
+                </p>
+                {card.jobTitle && (
+                  <p className="text-[10px] sm:text-[11px] opacity-80 mt-0.5 tracking-wider uppercase font-medium">
+                    {card.jobTitle}
+                  </p>
+                )}
+              </div>
+
+              {/* Botões de Ação */}
+              {(() => {
+                const globalRadius = card.buttonsBorderRadius ?? 16;
+                const vcardRadius = card.vcardButtonBorderRadius ?? globalRadius;
+                const whatsappRadius = card.whatsappButtonBorderRadius ?? globalRadius;
+                const pwaRadius = card.pwaButtonBorderRadius ?? globalRadius;
+                const aiAgentRadius = card.aiAgentButtonBorderRadius ?? globalRadius;
+
+                const vcardBg = card.vcardButtonColor || card.buttonColor || '#1A7FBE';
+                const vcardText = card.vcardButtonTextColor || actionButtonTextColor;
+
+                const whatsappBg = card.whatsappButtonColor || '#059669';
+                const whatsappText = card.whatsappButtonTextColor || '#FFFFFF';
+
+                const pwaBg = card.pwaButtonColor || '#0F172A';
+                const pwaText = card.pwaButtonTextColor || '#FFFFFF';
+
+                const aiAgentBg = card.aiAgentButtonColor || '#7C3AED';
+                const aiAgentText = card.aiAgentButtonTextColor || '#FFFFFF';
+
+                return (
+                  <div className="px-3.5 py-3 flex flex-col gap-2">
+                    <button
+                      type="button"
+                      className="w-full flex items-center justify-center gap-2 py-2.5 px-3 font-bold text-xs shadow-xs"
+                      style={{
+                        backgroundColor: vcardBg,
+                        color: vcardText,
+                        borderRadius: `${Math.round(vcardRadius * 0.85)}px`,
+                      }}
+                    >
+                      <Download size={14} />
+                      <span>Salvar contato no celular</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className="w-full flex items-center justify-center gap-2 py-2.5 px-3 font-bold text-xs shadow-xs"
+                      style={{
+                        backgroundColor: whatsappBg,
+                        color: whatsappText,
+                        borderRadius: `${Math.round(whatsappRadius * 0.85)}px`,
+                      }}
+                    >
+                      <Share2 size={14} />
+                      <span>Compartilhar no WhatsApp</span>
+                    </button>
+
+                    {/* Botão de Instalar no Celular */}
+                    {(() => {
+                      const appDisplayName = card.mobileAppName || (card.brandName ? `${card.name} | ${card.brandName}` : card.name);
+                      return (
+                        <button
+                          type="button"
+                          className="w-full flex items-center justify-center gap-2 py-2.5 px-3 font-bold text-xs shadow-xs"
+                          style={{
+                            backgroundColor: pwaBg,
+                            color: pwaText,
+                            borderRadius: `${Math.round(pwaRadius * 0.85)}px`,
+                          }}
+                        >
+                          <Smartphone size={14} />
+                          <span className="truncate">Instalar "{appDisplayName}" no celular</span>
+                        </button>
+                      );
+                    })()}
+
+                    {aiAgentInfo && (() => {
+                      const glowClass = getAiAgentButtonGlowClass(card.aiAgentGlowEnabled, card.aiAgentGlowIntensity);
+                      const basePaddingY = getAiAgentButtonPaddingY(card.aiAgentButtonSize, card.aiAgentButtonPaddingY);
+                      const previewPaddingY = Math.max(6, Math.round(basePaddingY * 0.8));
+                      const borderWidth = card.aiAgentButtonBorderWidth || 0;
+                      const borderColor = card.aiAgentButtonBorderColor || '#C084FC';
+                      return (
+                        <button
+                          type="button"
+                          className={`w-full flex items-center justify-center gap-2 px-3 font-bold text-xs shadow-xs relative overflow-hidden ${glowClass}`}
+                          style={{
+                            backgroundColor: aiAgentBg,
+                            color: aiAgentText,
+                            borderRadius: `${Math.round(aiAgentRadius * 0.85)}px`,
+                            paddingTop: `${previewPaddingY}px`,
+                            paddingBottom: `${previewPaddingY}px`,
+                            borderWidth: borderWidth > 0 ? `${Math.max(1, Math.round(borderWidth * 0.8))}px` : undefined,
+                            borderStyle: borderWidth > 0 ? 'solid' : undefined,
+                            borderColor: borderWidth > 0 ? borderColor : undefined,
+                          }}
+                        >
+                          <Bot size={previewPaddingY >= 13 ? 16 : 14} className="shrink-0" />
+                          <span>{card.aiAgentButtonText || 'Atendente Virtual'}</span>
+                          {card.aiAgentGlowEnabled !== false && (
+                            <Sparkles size={previewPaddingY >= 13 ? 14 : 12} className="text-purple-200/90 shrink-0 ml-0.5" />
+                          )}
+                        </button>
+                      );
+                    })()}
+                  </div>
+                );
+              })()}
+
+              {/* Resumo */}
+              {hasSummary && (
+                <div className="px-4 py-2 text-center border-t border-slate-100">
+                  <p className="text-xs leading-relaxed italic" style={{ color: summaryTextColor }}>
+                    "{card.summary}"
+                  </p>
+                </div>
+              )}
+
+              {/* Contatos - Somente se houver canais preenchidos */}
+              {hasContacts && (
+                <div className="px-3.5 py-3 flex flex-col gap-1.5 border-t border-slate-100">
+                  {hasWhatsapp && (
+                    <div className="flex items-center gap-2 p-2 rounded-lg bg-slate-50 text-xs">
+                      <MessageCircle size={14} className="text-emerald-600 shrink-0" />
+                      <span className="truncate">{card.whatsappPhone}</span>
+                    </div>
+                  )}
+                  {hasPhone && (
+                    <div className="flex items-center gap-2 p-2 rounded-lg bg-slate-50 text-xs">
+                      <Phone size={14} className="text-blue-600 shrink-0" />
+                      <span className="truncate">{card.phone}</span>
+                    </div>
+                  )}
+                  {hasEmail && (
+                    <div className="flex items-center gap-2 p-2 rounded-lg bg-slate-50 text-xs">
+                      <Mail size={14} className="text-indigo-600 shrink-0" />
+                      <span className="truncate">{card.email}</span>
+                    </div>
+                  )}
+                  {hasWebsite && (
+                    <div className="flex items-center gap-2 p-2 rounded-lg bg-slate-50 text-xs">
+                      <Globe size={14} className="text-sky-600 shrink-0" />
+                      <span className="truncate">{card.websiteUrl}</span>
+                    </div>
+                  )}
+                  {hasAddress && (
+                    <div className="flex items-center gap-2 p-2 rounded-lg bg-slate-50 text-xs">
+                      <MapPin size={14} className="text-rose-600 shrink-0" />
+                      <span className="truncate">
+                        {[card.address, card.city].filter(Boolean).join(', ')}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Redes Sociais - Somente se houver redes preenchidas */}
+              {hasSocial && (
+                <div className="px-4 py-3 border-t border-slate-100 text-center">
+                  <div className="flex items-center justify-center gap-2">
+                    {hasInstagram && (
+                      <div className="w-7 h-7 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center" title="Instagram">
+                        <Instagram size={13} />
+                      </div>
+                    )}
+                    {hasLinkedin && (
+                      <div className="w-7 h-7 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center" title="LinkedIn">
+                        <Linkedin size={13} />
+                      </div>
+                    )}
+                    {hasFacebook && (
+                      <div className="w-7 h-7 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center" title="Facebook">
+                        <Facebook size={13} />
+                      </div>
+                    )}
+                    {hasYoutube && (
+                      <div className="w-7 h-7 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center" title="YouTube">
+                        <Youtube size={13} />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* QR Code */}
+              <div
+                className="px-4 py-3 border-t border-slate-100 text-center transition-colors"
+                style={{
+                  backgroundColor: card.qrCodeSectionBgColor || undefined,
+                }}
+              >
+                <p className="text-[10px] font-bold uppercase mb-1.5" style={{ color: qrTitleColor }}>QR Code</p>
+                <DigitalCardQrCode
+                  slug={card.slug || 'preview'}
+                  qrCodeStyle={card.qrCodeStyle || 'quadrado'}
+                  foregroundColor={card.qrCodeForegroundColor || card.backgroundColor || '#12375B'}
+                  backgroundColor={card.qrCodeBackgroundColor || '#FFFFFF'}
+                  logoUrl={card.qrCodeLogoUrl || card.companyLogoUrl}
+                  size={120}
+                  showDownloadButton={false}
+                  frameStyle={card.qrCodeFrameStyle || 'none'}
+                  frameText={card.qrCodeFrameText || 'SCAN ME'}
+                  frameColor={card.qrCodeFrameColor || card.buttonColor || card.backgroundColor}
+                  frameTextColor={card.qrCodeFrameTextColor || '#FFFFFF'}
+                  dotsStyle={card.qrCodeDotsStyle}
+                  cornersSquareStyle={card.qrCodeCornersSquareStyle}
+                  cornersSquareColor={card.qrCodeCornersSquareColor}
+                  cornersDotStyle={card.qrCodeCornersDotStyle}
+                  cornersDotColor={card.qrCodeCornersDotColor}
+                  gradientEnabled={card.qrCodeGradientEnabled}
+                  gradientType={card.qrCodeGradientType}
+                  gradientStartColor={card.qrCodeGradientStartColor}
+                  gradientEndColor={card.qrCodeGradientEndColor}
+                  transparentBg={card.qrCodeTransparentBg}
+                  includeLogo={card.qrCodeIncludeLogo !== false}
+                  logoSize={card.qrCodeLogoSize || 0.22}
+                />
+              </div>
+
+              {/* Formulário de Primeiro Contato (se habilitado e não oculto) */}
+              {card.inquiryEnabled !== false && !card.hideInquiryForm && (
+                <div className="px-4 py-3 border-t border-slate-100/50">
+                  <div className="text-[11px] font-bold uppercase tracking-wider mb-1 flex items-center gap-1.5" style={{ color: contentContrast.titleColor }}>
+                    <Send size={12} className="text-sky-500" />
+                    <span>Enviar uma mensagem</span>
+                  </div>
+                  <p className="text-[10px] mb-2.5" style={{ color: contentContrast.subtitleColor }}>
+                    Deixe um recado diretamente para {card.name || 'o titular'}.
+                  </p>
+
+                  <div className="space-y-2">
+                    {card.inquiryShowName !== false && (
+                      <div>
+                        <label className="block text-[10px] font-semibold mb-0.5" style={{ color: contentContrast.labelColor }}>
+                          Seu Nome (opcional)
+                        </label>
+                        <div className="w-full px-2.5 py-1.5 text-[10px] rounded-lg border border-slate-200 bg-slate-50 text-slate-400">
+                          Ex: Maria Santos
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {card.inquiryShowEmail !== false && (
+                        <div>
+                          <label className="block text-[10px] font-semibold mb-0.5" style={{ color: contentContrast.labelColor }}>
+                            E-mail *
+                          </label>
+                          <div className="w-full px-2 py-1.5 text-[10px] rounded-lg border border-slate-200 bg-slate-50 text-slate-400 truncate">
+                            seu@email.com
+                          </div>
+                        </div>
+                      )}
+                      {card.inquiryShowPhone !== false && (
+                        <div>
+                          <label className="block text-[10px] font-semibold mb-0.5" style={{ color: contentContrast.labelColor }}>
+                            WhatsApp *
+                          </label>
+                          <div className="w-full px-2 py-1.5 text-[10px] rounded-lg border border-slate-200 bg-slate-50 text-slate-400 truncate">
+                            (11) 99999-9999
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {card.inquiryShowMessage !== false && (
+                      <div>
+                        <label className="block text-[10px] font-semibold mb-0.5" style={{ color: contentContrast.labelColor }}>
+                          Mensagem *
+                        </label>
+                        <div className="w-full px-2.5 py-1.5 text-[10px] rounded-lg border border-slate-200 bg-slate-50 text-slate-400">
+                          Olá, gostaria de saber mais...
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Consentimento Obrigatório com Alto Contraste */}
+                    {card.inquiryShowConsent !== false && (
+                      <div
+                        className="flex items-start gap-1.5 p-2 rounded-lg border"
+                        style={{
+                          backgroundColor: contentContrast.isDarkBg ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.03)',
+                          borderColor: contentContrast.isDarkBg ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.08)',
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={true}
+                          readOnly
+                          className="mt-0.5 rounded border-slate-300 text-sky-600 shrink-0 w-3.5 h-3.5"
+                        />
+                        <label
+                          className="text-[10px] font-medium leading-snug cursor-default select-none"
+                          style={{ color: contentContrast.consentColor }}
+                        >
+                          Concordo em compartilhar meus dados de contato com {card.name || 'o titular'} para fins de retorno desta mensagem.
+                        </label>
+                      </div>
+                    )}
+
+                    <button
+                      type="button"
+                      className="w-full py-2 px-3 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1.5 shadow-xs"
+                      style={{
+                        backgroundColor: card.buttonColor || '#1A7FBE',
+                        color: actionButtonTextColor,
+                      }}
+                    >
+                      <Send size={11} />
+                      <span>Enviar mensagem</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* CTA - Somente se configurado com label e link */}
+              {hasCta && (
+                <div className="px-4 py-2.5 border-t border-slate-100 text-center">
+                  <span className="text-[11px] font-bold text-slate-700 underline">
+                    {card.ctaLabel}
+                  </span>
+                </div>
+              )}
+
+              {/* Rodapé */}
+              <div className="px-4 py-2.5 text-center border-t border-slate-200/60">
+                <p className="text-[10px]" style={{ color: contentContrast.footerColor }}>
+                  {card.footerText || 'Cartão Digital Profissional'}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+          {/* BARRA INFERIOR / HOME INDICATOR */}
+          <div className="w-full pt-2 flex justify-center items-center">
+            {currentDevice.brand === 'Apple' ? (
+              // Barra de início do iOS
+              <div className="w-32 h-1 bg-slate-500/50 rounded-full" />
+            ) : currentDevice.isBoxy ? (
+              // Barra de navegação One UI moderna (Galaxy S Ultra)
+              <div className="w-24 h-1 bg-zinc-600/60 rounded-full" />
+            ) : (
+              // 3 botões sutis da linha Galaxy A
+              <div className="flex items-center gap-6 text-[10px] text-zinc-500/70">
+                <span>|||</span>
+                <span className="w-2.5 h-2.5 rounded-xs border border-zinc-500/70 inline-block" />
+                <span>&lt;</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
