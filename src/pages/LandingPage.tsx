@@ -319,7 +319,7 @@ export const LandingPage: React.FC = () => {
               {/* Título Principal */}
               <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-slate-900 dark:text-white tracking-tight leading-[1.12] font-heading">
                 Sua Identidade Profissional no{' '}
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-600 to-sky-400 dark:from-sky-400 dark:to-sky-300">
+                <span className="text-sky-600 dark:text-orange-400 font-black">
                   Bolso do Seu Cliente
                 </span>
               </h1>

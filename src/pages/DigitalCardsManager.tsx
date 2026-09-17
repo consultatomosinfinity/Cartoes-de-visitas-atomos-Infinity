@@ -101,6 +101,8 @@ export const DigitalCardsManager: React.FC = () => {
         jobTitle: 'Diretor Executivo',
         summary: 'Especialista em Soluções Corporativas e Cartões Digitais Inteligentes.',
         slug: 'jurandir-hora',
+        imageUrl: 'https://i.ibb.co/cKcG35kq/Jurandir.jpg',
+        companyLogoUrl: 'https://i.ibb.co/49XgSZd/Logo.jpg',
         siteAiAgentEnabled: true,
         aiAgentButtonText: 'Falar com IA 24h',
         aiAgentButtonColor: '#0284c7'
