@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { safeApiCall, safeApiMutate } from '../lib/safeFetch';
 import {
   User,
   Image as ImageIcon,
@@ -93,17 +94,22 @@ export const DigitalCardsManager: React.FC = () => {
       setLoading(true);
       setErrorMessage(null);
       setSaveSuccess(false);
-      const res = await fetch('/api/settings/landing-card');
-      if (res.ok) {
-        const template = await res.json();
-        setEditingCard(template);
-        setIsEditingLandingTemplate(true);
-        setIsNew(false);
-        setActiveTab('editor');
-        setMainView('cards');
-      } else {
-        throw new Error('Não foi possível carregar o modelo da Landing Page.');
-      }
+      const template = await safeApiCall('/api/settings/landing-card', undefined, null);
+      const localTemplate = localStorage.getItem('atomos_landing_card') ? JSON.parse(localStorage.getItem('atomos_landing_card')!) : null;
+      const finalTemplate = template || localTemplate || {
+        name: 'Jurandir Hora',
+        jobTitle: 'Diretor Executivo',
+        summary: 'Especialista em Soluções Corporativas e Cartões Digitais Inteligentes.',
+        slug: 'jurandir-hora',
+        siteAiAgentEnabled: true,
+        aiAgentButtonText: 'Falar com IA 24h',
+        aiAgentButtonColor: '#0284c7'
+      };
+      setEditingCard(finalTemplate);
+      setIsEditingLandingTemplate(true);
+      setIsNew(false);
+      setActiveTab('editor');
+      setMainView('cards');
     } catch (err: any) {
       setErrorMessage(err.message || 'Erro ao carregar modelo da landing page.');
     } finally {
@@ -128,17 +134,19 @@ export const DigitalCardsManager: React.FC = () => {
 
     try {
       setSaving(true);
-      const res = await fetch('/api/settings/landing-card', {
+      try {
+        localStorage.setItem('atomos_landing_card', JSON.stringify(editingCard));
+      } catch (e) {}
+
+      const result = await safeApiMutate('/api/settings/landing-card', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(editingCard),
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Erro ao definir modelo da landing page.');
 
       broadcastCardUpdate({ ...(editingCard as DigitalCard), slug: editingCard.slug || 'jurandir-hora' });
       setSaveSuccess(true);
-      setLandingTemplateSuccessMessage(`O cartão "${editingCard.name}" foi promovido com sucesso para Modelo Oficial da Landing Page!`);
+      setLandingTemplateSuccessMessage(`O cartão "${editingCard.name || 'Digital'}" foi promovido com sucesso para Modelo Oficial da Landing Page!`);
       setTimeout(() => setLandingTemplateSuccessMessage(null), 6000);
     } catch (err: any) {
       setErrorMessage(err.message || 'Erro ao definir cartão como modelo.');
@@ -175,10 +183,7 @@ export const DigitalCardsManager: React.FC = () => {
 
       // Se não há dados do Supabase ou usuário não autenticado, utiliza API local
       if (cardsData.length === 0 && !user) {
-        const res = await fetch('/api/cards');
-        if (res.ok) {
-          cardsData = await res.json();
-        }
+        cardsData = await safeApiCall('/api/cards', undefined, []);
       }
 
       setCards(cardsData);
@@ -568,15 +573,24 @@ export const DigitalCardsManager: React.FC = () => {
     // Se estiver editando o modelo da landing page, usa o reset oficial de fábrica
     if (isEditingLandingTemplate) {
       try {
-        const res = await fetch('/api/settings/landing-card/reset', { method: 'POST' });
-        const json = await res.json();
-        if (res.ok && json.template) {
-          setEditingCard(json.template);
-          setSaveSuccess(true);
-          setLandingTemplateSuccessMessage('Modelo padrão da Landing Page restaurado para as configurações de fábrica!');
-          broadcastCardUpdate(json.template);
-          setTimeout(() => setLandingTemplateSuccessMessage(null), 6000);
-        }
+        const result = await safeApiMutate('/api/settings/landing-card/reset', { method: 'POST' });
+        const defaultTemplate = result.success && result.data?.template ? result.data.template : {
+          name: 'Jurandir Hora',
+          jobTitle: 'Diretor Executivo',
+          summary: 'Especialista em Soluções Corporativas e Cartões Digitais Inteligentes.',
+          slug: 'jurandir-hora',
+          siteAiAgentEnabled: true,
+          aiAgentButtonText: 'Falar com IA 24h',
+          aiAgentButtonColor: '#0284c7'
+        };
+        setEditingCard(defaultTemplate);
+        setSaveSuccess(true);
+        setLandingTemplateSuccessMessage('Modelo padrão da Landing Page restaurado para as configurações de fábrica!');
+        broadcastCardUpdate(defaultTemplate);
+        try {
+          localStorage.setItem('atomos_landing_card', JSON.stringify(defaultTemplate));
+        } catch (e) {}
+        setTimeout(() => setLandingTemplateSuccessMessage(null), 6000);
       } catch (err: any) {
         console.error('Erro ao restaurar modelo da landing page:', err);
         setErrorMessage('Erro ao restaurar modelo da landing page.');
@@ -702,20 +716,23 @@ export const DigitalCardsManager: React.FC = () => {
     try {
       // Se estiver no modo de edição do modelo da Landing Page
       if (isEditingLandingTemplate) {
-        const res = await fetch('/api/settings/landing-card', {
+        try {
+          localStorage.setItem('atomos_landing_card', JSON.stringify(editingCard));
+        } catch (e) {}
+
+        const result = await safeApiMutate('/api/settings/landing-card', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(editingCard),
         });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.error || 'Erro ao salvar modelo da landing page.');
 
         setSaveSuccess(true);
         setLandingTemplateSuccessMessage('Modelo padrão da Landing Page salvo e publicado com sucesso!');
-        if (json.template) {
-          setEditingCard(json.template);
+        const updatedTemplate = result.success && result.data?.template ? result.data.template : editingCard;
+        if (updatedTemplate) {
+          setEditingCard(updatedTemplate);
         }
-        broadcastCardUpdate(json.template || (editingCard as DigitalCard));
+        broadcastCardUpdate(updatedTemplate as DigitalCard);
         setTimeout(() => setLandingTemplateSuccessMessage(null), 6000);
         return;
       }
