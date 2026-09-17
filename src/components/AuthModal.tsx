@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { safeApiCall } from '../lib/safeFetch';
 import { Mail, Lock, User as UserIcon, Eye, EyeOff, AlertCircle, CheckCircle, ArrowRight, Layers, KeyRound, Home } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext.tsx';
 
@@ -27,15 +28,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [isApprovalRequired, setIsApprovalRequired] = useState(false);
 
   React.useEffect(() => {
-    fetch('/api/system-settings')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((settings) => {
-        if (settings) {
-          if (settings.degustacaoDays) setTrialDays(settings.degustacaoDays);
-          if (settings.requireMasterApproval) setIsApprovalRequired(true);
-        }
-      })
-      .catch(() => {});
+    safeApiCall('/api/system-settings', undefined, null).then((settings) => {
+      const localSettings = localStorage.getItem('atomos_system_settings') ? JSON.parse(localStorage.getItem('atomos_system_settings')!) : null;
+      const finalSettings = settings || localSettings;
+      if (finalSettings) {
+        if (finalSettings.degustacaoDays) setTrialDays(finalSettings.degustacaoDays);
+        if (finalSettings.requireMasterApproval) setIsApprovalRequired(true);
+      }
+    }).catch(() => {});
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { User, Session } from '@supabase/supabase-js';
+import { safeApiCall } from '../lib/safeFetch';
 import {
   initSupabase,
   authSignIn,
@@ -199,10 +200,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const cleanEmail = email.trim().toLowerCase();
 
     // 1. Verifica políticas globais do sistema antes do cadastro
-    const settingsRes = await fetch('/api/system-settings').catch(() => null);
-    if (settingsRes && settingsRes.ok) {
-      const settings = await settingsRes.json();
-      if (!isMasterEmail(cleanEmail) && settings.allowPublicRegistration === false) {
+    const settings = await safeApiCall('/api/system-settings', undefined, null);
+    const localSettings = localStorage.getItem('atomos_system_settings') ? JSON.parse(localStorage.getItem('atomos_system_settings')!) : null;
+    const finalSettings = settings || localSettings;
+    if (finalSettings) {
+      if (!isMasterEmail(cleanEmail) && finalSettings.allowPublicRegistration === false) {
         throw new Error(
           'Novos auto-cadastros estão temporariamente desativados pelo Administrador Master. Entre em contato para liberação.'
         );

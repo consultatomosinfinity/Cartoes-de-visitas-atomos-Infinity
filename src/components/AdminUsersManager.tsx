@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { safeApiCall, safeApiMutate } from '../lib/safeFetch';
 import {
   Users,
   UserPlus,
@@ -123,12 +124,13 @@ export const AdminUsersManager: React.FC<AdminUsersManagerProps> = ({
       const [profilesData, cardsRes, settingsRes] = await Promise.all([
         getAllProfiles(),
         fetch('/api/cards').then((r) => (r.ok ? r.json() : [])).catch(() => []),
-        fetch('/api/system-settings').then((r) => (r.ok ? r.json() : null)).catch(() => null),
+        safeApiCall('/api/system-settings', undefined, null),
       ]);
       setUsers(profilesData);
       setCards(cardsRes);
-      if (settingsRes) {
-        setSystemSettings(settingsRes);
+      const localSettings = localStorage.getItem('atomos_system_settings') ? JSON.parse(localStorage.getItem('atomos_system_settings')!) : null;
+      if (settingsRes || localSettings) {
+        setSystemSettings({ ...(localSettings || {}), ...(settingsRes || {}) });
       }
     } catch (err: any) {
       setFeedback({ type: 'error', message: err.message || 'Erro ao carregar usuários' });
@@ -307,14 +309,18 @@ export const AdminUsersManager: React.FC<AdminUsersManagerProps> = ({
     e.preventDefault();
     setSettingsLoading(true);
     try {
-      const res = await fetch('/api/system-settings', {
+      try {
+        localStorage.setItem('atomos_system_settings', JSON.stringify(systemSettings));
+      } catch (e) {}
+
+      const result = await safeApiMutate('/api/system-settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(systemSettings),
       });
-      if (!res.ok) throw new Error('Falha ao salvar configurações do sistema.');
-      const data = await res.json();
-      if (data.settings) setSystemSettings(data.settings);
+
+      const updatedSettings = result.success && result.data?.settings ? result.data.settings : systemSettings;
+      setSystemSettings(updatedSettings);
       showNotification('success', 'Políticas de cadastro e degustação atualizadas com sucesso!');
       setShowSettingsModal(false);
     } catch (err: any) {

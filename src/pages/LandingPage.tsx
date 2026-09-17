@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { safeApiCall } from '../lib/safeFetch';
 import {
   Smartphone,
   Bot,
@@ -112,14 +113,13 @@ export const LandingPage: React.FC = () => {
 
   useEffect(() => {
     fetchLandingCard();
-    fetch('/api/system-settings')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((settings) => {
-        if (settings && typeof settings.degustacaoDays === 'number') {
-          setDegustacaoDays(settings.degustacaoDays);
-        }
-      })
-      .catch(() => {});
+    safeApiCall('/api/system-settings', undefined, null).then((settings) => {
+      const localSettings = localStorage.getItem('atomos_system_settings') ? JSON.parse(localStorage.getItem('atomos_system_settings')!) : null;
+      const finalSettings = settings || localSettings;
+      if (finalSettings && typeof finalSettings.degustacaoDays === 'number') {
+        setDegustacaoDays(finalSettings.degustacaoDays);
+      }
+    }).catch(() => {});
 
     // Sincronização em tempo real caso o Master altere o modelo em outra aba
     try {
@@ -127,14 +127,13 @@ export const LandingPage: React.FC = () => {
         const ch = new BroadcastChannel('digital_cards_sync');
         ch.onmessage = () => {
           fetchLandingCard();
-          fetch('/api/system-settings')
-            .then((r) => (r.ok ? r.json() : null))
-            .then((settings) => {
-              if (settings && typeof settings.degustacaoDays === 'number') {
-                setDegustacaoDays(settings.degustacaoDays);
-              }
-            })
-            .catch(() => {});
+          safeApiCall('/api/system-settings', undefined, null).then((settings) => {
+            const localSettings = localStorage.getItem('atomos_system_settings') ? JSON.parse(localStorage.getItem('atomos_system_settings')!) : null;
+            const finalSettings = settings || localSettings;
+            if (finalSettings && typeof finalSettings.degustacaoDays === 'number') {
+              setDegustacaoDays(finalSettings.degustacaoDays);
+            }
+          }).catch(() => {});
         };
         return () => {
           ch.close();
