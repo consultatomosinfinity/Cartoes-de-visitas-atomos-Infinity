@@ -23,6 +23,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [trialDays, setTrialDays] = useState<number>(30);
+  const [isApprovalRequired, setIsApprovalRequired] = useState(false);
+
+  React.useEffect(() => {
+    fetch('/api/system-settings')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((settings) => {
+        if (settings) {
+          if (settings.degustacaoDays) setTrialDays(settings.degustacaoDays);
+          if (settings.requireMasterApproval) setIsApprovalRequired(true);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,7 +54,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           throw new Error('A senha deve ter pelo menos 6 caracteres.');
         }
         await signUp(email.trim(), password, fullName.trim());
-        setSuccessMsg('Conta criada com sucesso! Caso necessário, confirme seu e-mail.');
+        if (isApprovalRequired) {
+          setSuccessMsg(
+            'Conta criada com sucesso! Sua solicitação está em análise e aguarda a liberação do Administrador Master.'
+          );
+        } else {
+          setSuccessMsg('Conta criada com sucesso! Redirecionando...');
+        }
         if (onSuccess) onSuccess();
       } else if (mode === 'reset') {
         await resetPassword(email.trim());
@@ -76,7 +96,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         </h2>
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-xs">
           {mode === 'login' && 'Gerencie seus cartões digitais, métricas e atendente IA.'}
-          {mode === 'register' && 'Comece seu período de degustação gratuita de 30 dias.'}
+          {mode === 'register' && `Comece seu período de degustação gratuita de ${trialDays} dias.`}
           {mode === 'reset' && 'Digite seu e-mail cadastrado para redefinir sua senha.'}
         </p>
       </div>

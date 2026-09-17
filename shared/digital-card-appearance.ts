@@ -18,6 +18,30 @@ export const PRESET_THEMES: Record<string, CardThemeColors> = {
     bodyColor: '#16213E',
     contentColor: '#0F172A',
   },
+  neumorphism_light: {
+    backgroundColor: '#E0E5EC',
+    buttonColor: '#E0E5EC',
+    bodyColor: '#E0E5EC',
+    contentColor: '#E0E5EC',
+  },
+  neumorphism_dark: {
+    backgroundColor: '#181B22',
+    buttonColor: '#181B22',
+    bodyColor: '#181B22',
+    contentColor: '#181B22',
+  },
+  glass_light: {
+    backgroundColor: 'rgba(255, 255, 255, 0.45)',
+    buttonColor: '#2563EB',
+    bodyColor: '#0F172A',
+    contentColor: 'rgba(255, 255, 255, 0.55)',
+  },
+  glass_dark: {
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    buttonColor: '#7C3AED',
+    bodyColor: '#090D16',
+    contentColor: 'rgba(30, 41, 59, 0.65)',
+  },
   verde: {
     backgroundColor: '#1B5E20',
     buttonColor: '#4CAF50',
@@ -188,6 +212,84 @@ export function getCardContentContrastColors(options: {
     consentColor: isUserInquiryValid ? userInquiryColor : (isUserSupportValid ? userSupportColor : defaultConsentText),
     // Rodapé
     footerColor: isUserSupportValid ? userSupportColor : defaultMutedText,
+  };
+}
+
+/**
+ * Verifica se um tema ou cartão é do estilo Neumorphism (Soft UI)
+ */
+export function isNeumorphismTheme(theme?: string): boolean {
+  if (!theme) return false;
+  const t = theme.toLowerCase().trim();
+  return t === 'neumorphism_light' || t === 'neumorphism_dark' || t.startsWith('neumorphism') || t === 'soft_ui' || t === 'neumorfismo';
+}
+
+/**
+ * Retorna as propriedades de relevo e sombra características do Neumorphism
+ */
+export function getNeumorphicCardStyles(isDark: boolean = false) {
+  if (isDark) {
+    return {
+      bg: '#181B22',
+      raised: '6px 6px 16px rgba(0, 0, 0, 0.75), -6px -6px 16px rgba(255, 255, 255, 0.04)',
+      raisedSubtle: '3px 3px 8px rgba(0, 0, 0, 0.65), -3px -3px 8px rgba(255, 255, 255, 0.04)',
+      inset: 'inset 3px 3px 7px rgba(0, 0, 0, 0.8), inset -3px -3px 7px rgba(255, 255, 255, 0.04)',
+      border: '1px solid rgba(255, 255, 255, 0.05)',
+      headerBorder: '1px solid rgba(255, 255, 255, 0.04)',
+      textColor: '#F1F5F9',
+      subtextColor: '#94A3B8',
+    };
+  }
+
+  return {
+    bg: '#E0E5EC',
+    raised: '6px 6px 14px #b8b9be, -6px -6px 14px #ffffff',
+    raisedSubtle: '3px 3px 8px #b8b9be, -3px -3px 8px #ffffff',
+    inset: 'inset 3px 3px 6px #b8b9be, inset -3px -3px 6px #ffffff',
+    border: '1px solid rgba(255, 255, 255, 0.6)',
+    headerBorder: '1px solid rgba(255, 255, 255, 0.6)',
+    textColor: '#2D3748',
+    subtextColor: '#64748B',
+  };
+}
+
+/**
+ * Verifica se um tema ou cartão é do estilo Glassmorphism (Glass UI)
+ */
+export function isGlassmorphismTheme(theme?: string): boolean {
+  if (!theme) return false;
+  const t = theme.toLowerCase().trim();
+  return t === 'glass_light' || t === 'glass_dark' || t.startsWith('glass') || t === 'glassmorphism' || t === 'vidro';
+}
+
+/**
+ * Retorna as propriedades de vidro fosco (backdrop-blur, border translúcido e brilho)
+ */
+export function getGlassmorphicCardStyles(isDark: boolean = false) {
+  if (isDark) {
+    return {
+      bg: 'rgba(15, 23, 42, 0.65)',
+      cardBg: 'rgba(30, 41, 59, 0.55)',
+      backdropBlur: 'blur(16px)',
+      border: '1px solid rgba(255, 255, 255, 0.12)',
+      borderSubtle: '1px solid rgba(255, 255, 255, 0.08)',
+      shadow: '0 20px 40px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+      inset: 'rgba(15, 23, 42, 0.7)',
+      textColor: '#F8FAFC',
+      subtextColor: '#94A3B8',
+    };
+  }
+
+  return {
+    bg: 'rgba(255, 255, 255, 0.55)',
+    cardBg: 'rgba(255, 255, 255, 0.65)',
+    backdropBlur: 'blur(16px)',
+    border: '1px solid rgba(255, 255, 255, 0.6)',
+    borderSubtle: '1px solid rgba(255, 255, 255, 0.4)',
+    shadow: '0 20px 40px rgba(31, 38, 135, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.8)',
+    inset: 'rgba(240, 244, 248, 0.8)',
+    textColor: '#1E293B',
+    subtextColor: '#64748B',
   };
 }
 

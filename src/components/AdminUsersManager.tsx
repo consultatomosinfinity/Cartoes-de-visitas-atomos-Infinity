@@ -23,8 +23,23 @@ import {
   Layers,
   Sparkles,
   ChevronRight,
+  QrCode,
+  Share2,
+  Copy,
+  ExternalLink,
+  MessageCircle,
+  CheckCircle2,
+  Download,
+  Lock,
+  Sliders,
+  Clock,
+  ShieldAlert,
+  ToggleLeft,
+  ToggleRight,
+  HelpCircle,
 } from 'lucide-react';
-import { UserProfile, UserRole, UserPlan, UserAccountStatus } from '../types.ts';
+import { UserProfile, UserRole, UserPlan, UserAccountStatus, DigitalCard, SystemSettings } from '../types.ts';
+import { DigitalCardQrCode } from './DigitalCardQrCode.tsx';
 import {
   getAllProfiles,
   updateUserProfile,
@@ -44,6 +59,7 @@ export const AdminUsersManager: React.FC<AdminUsersManagerProps> = ({
   onBackToCards,
 }) => {
   const [users, setUsers] = useState<UserProfile[]>([]);
+  const [cards, setCards] = useState<DigitalCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
@@ -51,11 +67,30 @@ export const AdminUsersManager: React.FC<AdminUsersManagerProps> = ({
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
+  // Configurações Globais de Auto-Cadastro & Degustação
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [settingsLoading, setSettingsLoading] = useState(false);
+  const [systemSettings, setSystemSettings] = useState<SystemSettings>({
+    requireMasterApproval: false,
+    defaultRole: 'cliente',
+    defaultPlan: 'degustacao',
+    degustacaoDays: 30,
+    allowPublicRegistration: true,
+    masterWhatsApp: '+55 (15) 99625-9353',
+    customWelcomeMessage: '',
+  });
+
   // Modais
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showDeliveryModal, setShowDeliveryModal] = useState(false);
+  const [deliveryUser, setDeliveryUser] = useState<UserProfile | null>(null);
+  const [deliveryCard, setDeliveryCard] = useState<DigitalCard | null>(null);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [copiedDeliveryLink, setCopiedDeliveryLink] = useState(false);
+  const [copiedMessage, setCopiedMessage] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
@@ -64,7 +99,7 @@ export const AdminUsersManager: React.FC<AdminUsersManagerProps> = ({
     fullName: '',
     email: '',
     password: '',
-    role: 'cliente' as UserRole,
+    role: 'degustador' as UserRole,
     plan: 'degustacao' as UserPlan,
   });
 
@@ -82,11 +117,19 @@ export const AdminUsersManager: React.FC<AdminUsersManagerProps> = ({
     sendEmail: false,
   });
 
-  const loadUsers = async () => {
+  const loadData = async () => {
     setLoading(true);
     try {
-      const data = await getAllProfiles();
-      setUsers(data);
+      const [profilesData, cardsRes, settingsRes] = await Promise.all([
+        getAllProfiles(),
+        fetch('/api/cards').then((r) => (r.ok ? r.json() : [])).catch(() => []),
+        fetch('/api/system-settings').then((r) => (r.ok ? r.json() : null)).catch(() => null),
+      ]);
+      setUsers(profilesData);
+      setCards(cardsRes);
+      if (settingsRes) {
+        setSystemSettings(settingsRes);
+      }
     } catch (err: any) {
       setFeedback({ type: 'error', message: err.message || 'Erro ao carregar usuários' });
     } finally {
@@ -95,7 +138,7 @@ export const AdminUsersManager: React.FC<AdminUsersManagerProps> = ({
   };
 
   useEffect(() => {
-    loadUsers();
+    loadData();
   }, []);
 
   const showNotification = (type: 'success' | 'error', message: string) => {
@@ -122,10 +165,23 @@ export const AdminUsersManager: React.FC<AdminUsersManagerProps> = ({
   const totalMaster = users.filter((u) => u.role === 'master').length;
   const totalAdmin = users.filter((u) => u.role === 'admin').length;
   const totalColaborador = users.filter((u) => u.role === 'colaborador').length;
+  const totalDegustador = users.filter((u) => u.role === 'degustador' || u.plan === 'degustacao').length;
   const totalClientes = users.filter((u) => u.role === 'cliente').length;
   const totalPausados = users.filter((u) => u.status === 'pausado').length;
 
   // Handlers
+  const handleOpenDelivery = (u: UserProfile) => {
+    setDeliveryUser(u);
+    const userCard = cards.find(
+      (c) => String(c.userId) === String(u.id) || (c as any).user_id === u.id || (c as any).email === u.email
+    ) || null;
+    setDeliveryCard(userCard);
+    setCopiedLink(false);
+    setCopiedDeliveryLink(false);
+    setCopiedMessage(false);
+    setShowDeliveryModal(true);
+  };
+
   const handleOpenEdit = (u: UserProfile) => {
     setSelectedUser(u);
     setEditForm({
@@ -145,7 +201,7 @@ export const AdminUsersManager: React.FC<AdminUsersManagerProps> = ({
       await updateUserProfile(selectedUser.id, editForm);
       showNotification('success', `Usuário ${selectedUser.email} atualizado com sucesso!`);
       setShowEditModal(false);
-      await loadUsers();
+      await loadData();
     } catch (err: any) {
       showNotification('error', err.message || 'Falha ao atualizar usuário');
     } finally {
@@ -167,7 +223,7 @@ export const AdminUsersManager: React.FC<AdminUsersManagerProps> = ({
         'success',
         `Conta de ${u.email} ${nextStatus === 'ativo' ? 'ativada' : 'pausada'} com sucesso.`
       );
-      await loadUsers();
+      await loadData();
     } catch (err: any) {
       showNotification('error', err.message || 'Erro ao alterar status');
     }
@@ -210,7 +266,7 @@ export const AdminUsersManager: React.FC<AdminUsersManagerProps> = ({
       await deleteUserAccount(selectedUser.id);
       showNotification('success', `Usuário ${selectedUser.email} excluído.`);
       setShowDeleteModal(false);
-      await loadUsers();
+      await loadData();
     } catch (err: any) {
       showNotification('error', err.message || 'Erro ao excluir usuário');
     } finally {
@@ -236,12 +292,47 @@ export const AdminUsersManager: React.FC<AdminUsersManagerProps> = ({
         fullName: '',
         email: '',
         password: '',
-        role: 'cliente',
+        role: 'degustador',
         plan: 'degustacao',
       });
-      await loadUsers();
+      await loadData();
     } catch (err: any) {
       showNotification('error', err.message || 'Falha ao cadastrar usuário');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleSaveSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSettingsLoading(true);
+    try {
+      const res = await fetch('/api/system-settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(systemSettings),
+      });
+      if (!res.ok) throw new Error('Falha ao salvar configurações do sistema.');
+      const data = await res.json();
+      if (data.settings) setSystemSettings(data.settings);
+      showNotification('success', 'Políticas de cadastro e degustação atualizadas com sucesso!');
+      setShowSettingsModal(false);
+    } catch (err: any) {
+      showNotification('error', err.message || 'Erro ao salvar configurações.');
+    } finally {
+      setSettingsLoading(false);
+    }
+  };
+
+  const handleQuickApprove = async (u: UserProfile) => {
+    setActionLoading(true);
+    try {
+      const res = await fetch(`/api/admin/users/${u.id}/approve`, { method: 'POST' });
+      if (!res.ok) throw new Error('Falha ao aprovar usuário.');
+      showNotification('success', `Acesso de ${u.fullName || u.email} liberado e ativado com sucesso!`);
+      await loadData();
+    } catch (err: any) {
+      showNotification('error', err.message || 'Erro ao aprovar usuário.');
     } finally {
       setActionLoading(false);
     }
@@ -269,6 +360,13 @@ export const AdminUsersManager: React.FC<AdminUsersManagerProps> = ({
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/30">
             <Briefcase className="w-3.5 h-3.5" />
             Colaborador
+          </span>
+        );
+      case 'degustador':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30">
+            <QrCode className="w-3.5 h-3.5" />
+            Degustador
           </span>
         );
       default:
@@ -385,7 +483,7 @@ export const AdminUsersManager: React.FC<AdminUsersManagerProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           {onBackToCards && (
             <button
               onClick={onBackToCards}
@@ -394,6 +492,15 @@ export const AdminUsersManager: React.FC<AdminUsersManagerProps> = ({
               Voltar aos Cartões
             </button>
           )}
+
+          <button
+            onClick={() => setShowSettingsModal(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-slate-800 dark:text-slate-100 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-300/80 dark:border-slate-700 shadow-sm transition"
+            title="Configurar Aprovação Prévia do Master, Degustação e Regras de Auto-Cadastro"
+          >
+            <Sliders className="w-4 h-4 text-amber-500" />
+            Políticas de Cadastro
+          </button>
 
           <button
             onClick={() => setShowAddModal(true)}
@@ -406,14 +513,25 @@ export const AdminUsersManager: React.FC<AdminUsersManagerProps> = ({
       </div>
 
       {/* Grid de Estatísticas Rápidas */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
         <div className="bg-white dark:bg-[#1E293B] p-4 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm">
           <div className="flex items-center justify-between text-gray-500 dark:text-gray-400 mb-1">
-            <span className="text-xs font-medium">Total de Usuários</span>
+            <span className="text-xs font-medium">Total Usuários</span>
             <Users className="w-4 h-4 text-blue-500" />
           </div>
           <div className="text-2xl font-bold text-gray-900 dark:text-white">{totalUsers}</div>
-          <div className="text-[11px] text-gray-400 mt-1">Registrados na plataforma</div>
+          <div className="text-[11px] text-gray-400 mt-1">Registrados</div>
+        </div>
+
+        <div className="bg-white dark:bg-[#1E293B] p-4 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm">
+          <div className="flex items-center justify-between text-gray-500 dark:text-gray-400 mb-1">
+            <span className="text-xs font-medium">Degustadores</span>
+            <QrCode className="w-4 h-4 text-purple-500" />
+          </div>
+          <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">{totalDegustador}</div>
+          <div className="text-[11px] text-purple-500/80 dark:text-purple-400/80 mt-1">
+            Link & QR direto
+          </div>
         </div>
 
         <div className="bg-white dark:bg-[#1E293B] p-4 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm">
@@ -429,8 +547,8 @@ export const AdminUsersManager: React.FC<AdminUsersManagerProps> = ({
 
         <div className="bg-white dark:bg-[#1E293B] p-4 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm">
           <div className="flex items-center justify-between text-gray-500 dark:text-gray-400 mb-1">
-            <span className="text-xs font-medium">Admins & Colaboradores</span>
-            <Shield className="w-4 h-4 text-purple-500" />
+            <span className="text-xs font-medium">Admins & Colabs</span>
+            <Shield className="w-4 h-4 text-sky-500" />
           </div>
           <div className="text-2xl font-bold text-gray-900 dark:text-white">
             {totalAdmin + totalColaborador}
@@ -440,7 +558,7 @@ export const AdminUsersManager: React.FC<AdminUsersManagerProps> = ({
           </div>
         </div>
 
-        <div className="bg-white dark:bg-[#1E293B] p-4 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm">
+        <div className="bg-white dark:bg-[#1E293B] p-4 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm col-span-2 sm:col-span-1">
           <div className="flex items-center justify-between text-gray-500 dark:text-gray-400 mb-1">
             <span className="text-xs font-medium">Clientes Ativos</span>
             <UserCheck className="w-4 h-4 text-emerald-500" />
@@ -449,7 +567,7 @@ export const AdminUsersManager: React.FC<AdminUsersManagerProps> = ({
             {totalClientes - totalPausados}
           </div>
           <div className="text-[11px] text-gray-400 mt-1">
-            {totalPausados > 0 ? `${totalPausados} pausado(s)` : 'Nenhuma conta pausada'}
+            {totalPausados > 0 ? `${totalPausados} pausado(s)` : 'Sem pausas'}
           </div>
         </div>
       </div>
@@ -476,6 +594,7 @@ export const AdminUsersManager: React.FC<AdminUsersManagerProps> = ({
               className="px-3 py-2 text-xs rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 outline-none"
             >
               <option value="all">Todas as Funções</option>
+              <option value="degustador">🍷 Degustador</option>
               <option value="master">👑 Master</option>
               <option value="admin">🛡️ Admin</option>
               <option value="colaborador">🤝 Colaborador</option>
@@ -508,7 +627,7 @@ export const AdminUsersManager: React.FC<AdminUsersManagerProps> = ({
             </select>
 
             <button
-              onClick={loadUsers}
+              onClick={loadData}
               disabled={loading}
               title="Atualizar lista"
               className="p-2 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition"
@@ -610,7 +729,29 @@ export const AdminUsersManager: React.FC<AdminUsersManagerProps> = ({
 
                       {/* Ações */}
                       <td className="py-3.5 px-4 text-right">
-                        <div className="inline-flex items-center gap-1">
+                        <div className="inline-flex items-center gap-1.5 justify-end">
+                          {/* Botão de Aprovação Rápida para contas Pausadas */}
+                          {u.status === 'pausado' && !isPrimaryMaster && (
+                            <button
+                              onClick={() => handleQuickApprove(u)}
+                              disabled={actionLoading}
+                              title="Aprovar e Liberar Acesso com 1 Clique"
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs transition animate-pulse"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>Aprovar</span>
+                            </button>
+                          )}
+
+                          {/* Botão Entrega ao Degustador / Compartilhar Cartão */}
+                          <button
+                            onClick={() => handleOpenDelivery(u)}
+                            title="Gerar / Entregar Link e QR Code do Cartão (Modo Degustador)"
+                            className="p-1.5 text-purple-600 hover:text-purple-700 bg-purple-500/10 hover:bg-purple-500/20 dark:text-purple-400 dark:hover:bg-purple-900/40 rounded-lg transition"
+                          >
+                            <QrCode className="w-4 h-4" />
+                          </button>
+
                           {/* Botão Pausar / Ativar */}
                           <button
                             onClick={() => handleToggleStatus(u)}
@@ -758,7 +899,8 @@ export const AdminUsersManager: React.FC<AdminUsersManagerProps> = ({
                     onChange={(e) => setAddForm({ ...addForm, role: e.target.value as UserRole })}
                     className="w-full px-3 py-2.5 text-xs rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white outline-none"
                   >
-                    <option value="cliente">👤 Cliente</option>
+                    <option value="degustador">🍷 Degustador (Sem Acesso ao Painel)</option>
+                    <option value="cliente">👤 Cliente Padrão</option>
                     <option value="colaborador">🤝 Colaborador</option>
                     <option value="admin">🛡️ Administrador</option>
                     <option value="master">👑 Master</option>
@@ -781,6 +923,15 @@ export const AdminUsersManager: React.FC<AdminUsersManagerProps> = ({
                   </select>
                 </div>
               </div>
+
+              {addForm.role === 'degustador' && (
+                <div className="p-3.5 rounded-xl bg-purple-500/10 border border-purple-500/30 text-purple-900 dark:text-purple-200 text-xs flex items-start gap-2.5">
+                  <Lock className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0 mt-0.5" />
+                  <p className="leading-relaxed">
+                    <strong>Perfil Degustador:</strong> Este usuário não terá acesso a painéis de edição ou alteração de status. Ele terá acesso apenas à sua <strong>Página de Entrega</strong> com o link do cartão e QR Code para divulgação. Todas as edições, pausas e exclusões são exclusivas do Master.
+                  </p>
+                </div>
+              )}
 
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-800">
                 <button
@@ -851,6 +1002,7 @@ export const AdminUsersManager: React.FC<AdminUsersManagerProps> = ({
                     onChange={(e) => setEditForm({ ...editForm, role: e.target.value as UserRole })}
                     className="w-full px-3 py-2.5 text-xs rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white outline-none disabled:opacity-60"
                   >
+                    <option value="degustador">🍷 Degustador (Sem Acesso ao Painel)</option>
                     <option value="cliente">👤 Cliente</option>
                     <option value="colaborador">🤝 Colaborador</option>
                     <option value="admin">🛡️ Administrador</option>
@@ -910,6 +1062,267 @@ export const AdminUsersManager: React.FC<AdminUsersManagerProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Entrega ao Degustador / Compartilhamento de Cartão */}
+      {showDeliveryModal && deliveryUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white dark:bg-[#1E293B] w-full max-w-2xl rounded-3xl border border-gray-200 dark:border-gray-800 shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between p-5 border-b border-gray-200 dark:border-gray-800 bg-gradient-to-r from-purple-500/10 via-amber-500/5 to-transparent">
+              <div className="flex items-center gap-3">
+                <span className="p-2.5 rounded-2xl bg-purple-500/20 text-purple-600 dark:text-purple-400 border border-purple-500/30">
+                  <QrCode className="w-6 h-6" />
+                </span>
+                <div>
+                  <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    <span>Entrega do Cartão & QR Code</span>
+                    <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-500/30">
+                      Modo Degustador
+                    </span>
+                  </h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Titular: <strong>{deliveryUser.fullName || deliveryUser.email}</strong>
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowDeliveryModal(false)}
+                className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-xl"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6 overflow-y-auto">
+              {!deliveryCard ? (
+                <div className="p-8 text-center bg-gray-50 dark:bg-gray-800/60 rounded-2xl border border-gray-200 dark:border-gray-700 space-y-3">
+                  <AlertTriangle className="w-10 h-10 mx-auto text-amber-500" />
+                  <h4 className="text-sm font-bold text-gray-900 dark:text-white">
+                    Nenhum cartão vinculado a este usuário
+                  </h4>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 max-w-md mx-auto">
+                    O usuário <strong>{deliveryUser.email}</strong> ainda não possui um cartão digital criado ou atribuído.
+                  </p>
+                  <div className="pt-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowDeliveryModal(false);
+                        onSelectUserCards?.(deliveryUser.id, deliveryUser.email);
+                      }}
+                      className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs shadow-sm transition"
+                    >
+                      Criar Cartão para este Degustador
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {/* Cartão Informativo */}
+                  <div className="flex flex-col sm:flex-row items-center gap-4 p-4 rounded-2xl bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700">
+                    <div className="w-12 h-12 rounded-xl bg-slate-200 dark:bg-slate-700 overflow-hidden shrink-0 border border-gray-300 dark:border-gray-600 flex items-center justify-center font-bold text-gray-600 dark:text-gray-300">
+                      {deliveryCard.imageUrl ? (
+                        <img src={deliveryCard.imageUrl} alt={deliveryCard.name} className="w-full h-full object-cover" />
+                      ) : (
+                        deliveryCard.name.slice(0, 2).toUpperCase()
+                      )}
+                    </div>
+                    <div className="flex-1 text-center sm:text-left min-w-0">
+                      <div className="font-bold text-sm text-gray-900 dark:text-white truncate">
+                        {deliveryCard.name}
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                        {deliveryCard.jobTitle || 'Profissional'} • {deliveryCard.brandName || 'Átomos Infinity'}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border ${
+                        deliveryCard.status === 'ativo'
+                          ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+                          : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30'
+                      }`}>
+                        {deliveryCard.status === 'ativo' ? '🟢 Ativo' : '🟠 Pausado'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Links para Envio */}
+                  <div className="space-y-3">
+                    {/* Link da Página de Entrega / Degustador */}
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1.5">
+                        <Sparkles size={13} className="text-purple-500" />
+                        <span>Link da Página de Acesso do Degustador (Recomendado)</span>
+                      </label>
+                      <div className="flex items-center gap-2 bg-purple-500/5 dark:bg-purple-950/20 border border-purple-500/30 rounded-xl p-1.5 pl-3">
+                        <input
+                          type="text"
+                          readOnly
+                          value={`${typeof window !== 'undefined' ? window.location.origin : ''}/degustador/${deliveryCard.slug}`}
+                          className="bg-transparent text-xs text-purple-700 dark:text-purple-300 font-mono flex-1 outline-none truncate"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const url = `${window.location.origin}/degustador/${deliveryCard.slug}`;
+                            navigator.clipboard.writeText(url);
+                            setCopiedDeliveryLink(true);
+                            setTimeout(() => setCopiedDeliveryLink(false), 3000);
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition flex items-center gap-1 shrink-0"
+                        >
+                          {copiedDeliveryLink ? <Check size={13} /> : <Copy size={13} />}
+                          <span>{copiedDeliveryLink ? 'Copiado!' : 'Copiar'}</span>
+                        </button>
+                      </div>
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
+                        Página exclusiva com o QR Code, link do cartão e botão para falar com o Master. Sem menus nem opções de edição.
+                      </p>
+                    </div>
+
+                    {/* Link Direto do Cartão */}
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1.5">
+                        <ExternalLink size={13} className="text-sky-500" />
+                        <span>Link Direto do Cartão Digital</span>
+                      </label>
+                      <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-1.5 pl-3">
+                        <input
+                          type="text"
+                          readOnly
+                          value={`${typeof window !== 'undefined' ? window.location.origin : ''}/cartao/${deliveryCard.slug}`}
+                          className="bg-transparent text-xs text-sky-600 dark:text-sky-400 font-mono flex-1 outline-none truncate"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const url = `${window.location.origin}/cartao/${deliveryCard.slug}`;
+                            navigator.clipboard.writeText(url);
+                            setCopiedLink(true);
+                            setTimeout(() => setCopiedLink(false), 3000);
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-xs font-bold transition flex items-center gap-1 shrink-0"
+                        >
+                          {copiedLink ? <Check size={13} /> : <Copy size={13} />}
+                          <span>{copiedLink ? 'Copiado!' : 'Copiar'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* QR Code Preview e Download */}
+                  <div className="p-4 rounded-2xl bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row items-center gap-4">
+                    <div className="bg-white p-2.5 rounded-xl shadow-md border border-gray-200 shrink-0">
+                      <DigitalCardQrCode
+                        slug={deliveryCard.slug}
+                        qrCodeStyle={deliveryCard.qrCodeStyle || 'arredondado'}
+                        foregroundColor={deliveryCard.qrCodeForegroundColor || '#12375B'}
+                        backgroundColor={deliveryCard.qrCodeBackgroundColor || '#FFFFFF'}
+                        size={120}
+                        showDownloadButton={false}
+                      />
+                    </div>
+                    <div className="flex-1 space-y-2 text-center sm:text-left">
+                      <h5 className="text-xs font-bold text-gray-900 dark:text-white">QR Code Exclusivo Gerado</h5>
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                        Pode ser enviado como imagem no WhatsApp ou impresso pelo cliente.
+                      </p>
+                      <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const canvas = document.querySelector('canvas');
+                            if (canvas) {
+                              const a = document.createElement('a');
+                              a.download = `qrcode-${deliveryCard.slug}.png`;
+                              a.href = canvas.toDataURL('image/png');
+                              a.click();
+                            }
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs"
+                        >
+                          <Download size={13} />
+                          <span>Baixar PNG</span>
+                        </button>
+                        <a
+                          href={`/degustador/${deliveryCard.slug}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="px-3 py-1.5 rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold text-xs flex items-center gap-1.5"
+                        >
+                          <ExternalLink size={13} />
+                          <span>Abrir Página</span>
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Mensagem Formatada para WhatsApp */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                        <MessageCircle size={14} className="text-emerald-500" />
+                        <span>Mensagem Pronta para Enviar ao Cliente</span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const msg = `Olá ${deliveryUser.fullName || ''}! 👋\n\nSeu Cartão Digital Interativo Átomos Infinity já está configurado e pronto para uso no Modo Degustação!\n\n🔗 Acesse sua página com o link e QR Code para divulgação:\n${window.location.origin}/degustador/${deliveryCard.slug}\n\n📲 Ou acesse diretamente seu cartão:\n${window.location.origin}/cartao/${deliveryCard.slug}\n\nQualquer ajuste de dados, telefones ou ativação de novos recursos é só falar com a gente!`;
+                          navigator.clipboard.writeText(msg);
+                          setCopiedMessage(true);
+                          setTimeout(() => setCopiedMessage(false), 3000);
+                        }}
+                        className="text-xs text-purple-600 dark:text-purple-400 font-bold hover:underline flex items-center gap-1"
+                      >
+                        {copiedMessage ? <Check size={13} /> : <Copy size={13} />}
+                        <span>{copiedMessage ? 'Mensagem Copiada!' : 'Copiar Texto Completo'}</span>
+                      </button>
+                    </div>
+
+                    <div className="p-3.5 rounded-xl bg-slate-900 text-slate-200 font-mono text-[11px] leading-relaxed border border-slate-800 whitespace-pre-line">
+                      {`Olá ${deliveryUser.fullName || ''}! 👋
+
+Seu Cartão Digital Interativo Átomos Infinity já está configurado e pronto para uso no Modo Degustação!
+
+🔗 Acesse sua página com o link e QR Code para divulgação:
+${typeof window !== 'undefined' ? window.location.origin : ''}/degustador/${deliveryCard.slug}
+
+📲 Ou acesse diretamente seu cartão:
+${typeof window !== 'undefined' ? window.location.origin : ''}/cartao/${deliveryCard.slug}
+
+Qualquer ajuste de dados, telefones ou ativação de novos recursos é só falar com a gente!`}
+                    </div>
+
+                    <div className="pt-2 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const msg = `Olá ${deliveryUser.fullName || ''}! 👋\n\nSeu Cartão Digital Interativo Átomos Infinity já está configurado e pronto para uso no Modo Degustação!\n\n🔗 Acesse sua página com o link e QR Code para divulgação:\n${window.location.origin}/degustador/${deliveryCard.slug}\n\n📲 Ou acesse diretamente seu cartão:\n${window.location.origin}/cartao/${deliveryCard.slug}\n\nQualquer ajuste de dados, telefones ou ativação de novos recursos é só falar com a gente!`;
+                          const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
+                          window.open(url, '_blank');
+                        }}
+                        className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-2 shadow-md transition cursor-pointer"
+                      >
+                        <MessageCircle size={15} />
+                        <span>Abrir WhatsApp para Enviar</span>
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-gray-200 dark:border-gray-800 flex justify-end bg-gray-50/50 dark:bg-gray-900/40">
+              <button
+                type="button"
+                onClick={() => setShowDeliveryModal(false)}
+                className="px-5 py-2 text-sm font-semibold text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition"
+              >
+                Fechar
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1029,6 +1442,248 @@ export const AdminUsersManager: React.FC<AdminUsersManagerProps> = ({
                 {actionLoading ? 'Excluindo...' : 'Sim, Excluir'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Políticas de Auto-Cadastro & Degustação */}
+      {showSettingsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white dark:bg-[#1E293B] w-full max-w-2xl rounded-3xl border border-gray-200 dark:border-gray-800 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            {/* Cabeçalho */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-800 bg-gradient-to-r from-amber-500/10 via-orange-500/5 to-transparent">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-2xl bg-amber-500/20 text-amber-600 dark:text-amber-400">
+                  <Sliders className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    Políticas de Cadastro & Degustação
+                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300">
+                      Master Exclusivo
+                    </span>
+                  </h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Defina como novos usuários entram no sistema ao se cadastrarem pelo site.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowSettingsModal(false)}
+                className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-xl"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Conteúdo rolável */}
+            <form onSubmit={handleSaveSettings} className="p-6 space-y-6 overflow-y-auto flex-1">
+              {/* 1. Aprovação Obrigatória do Master */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 space-y-3">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="space-y-0.5">
+                    <label className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                      <ShieldAlert className="w-4 h-4 text-amber-500" />
+                      Aprovação Obrigatória do Master
+                    </label>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                      Quando ativado, novos usuários cadastrados pelo site entram com status <strong>"Pausado (Aguardando Aprovação)"</strong> e só acessam após seu clique em <strong>"Aprovar"</strong>.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSystemSettings({
+                        ...systemSettings,
+                        requireMasterApproval: !systemSettings.requireMasterApproval,
+                      })
+                    }
+                    className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      systemSettings.requireMasterApproval ? 'bg-amber-500' : 'bg-slate-300 dark:bg-slate-700'
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                        systemSettings.requireMasterApproval ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+                <div className="text-[11px] text-amber-700 dark:text-amber-300/90 bg-amber-500/10 p-2.5 rounded-xl border border-amber-500/20">
+                  {systemSettings.requireMasterApproval
+                    ? '🔒 Modo Seguro: O usuário verá tela de "Aguardando Aprovação" com botão direto para seu WhatsApp até você liberá-lo no painel.'
+                    : '⚡ Modo Direto (Padrão): O usuário entra ativo e já pode acessar imediatamente após se cadastrar.'}
+                </div>
+              </div>
+
+              {/* 2. Duração do Período de Degustação */}
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <Clock className="w-4 h-4 text-sky-500" />
+                    Duração do Período de Degustação
+                  </span>
+                  <span className="text-amber-600 dark:text-amber-400 font-bold">
+                    {systemSettings.degustacaoDays} dias configurados
+                  </span>
+                </label>
+                <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+                  {[7, 14, 15, 30, 45, 60].map((days) => (
+                    <button
+                      key={days}
+                      type="button"
+                      onClick={() => setSystemSettings({ ...systemSettings, degustacaoDays: days })}
+                      className={`py-2 px-3 text-xs font-bold rounded-xl border transition ${
+                        systemSettings.degustacaoDays === days
+                          ? 'bg-sky-600 text-white border-sky-600 shadow-sm'
+                          : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
+                      }`}
+                    >
+                      {days} dias {days === 30 && '(Padrão)'}
+                    </button>
+                  ))}
+                </div>
+                <div className="pt-1 flex items-center gap-2">
+                  <span className="text-xs text-gray-500 dark:text-gray-400">Ou digite quantidade personalizada em dias:</span>
+                  <input
+                    type="number"
+                    min="1"
+                    max="365"
+                    value={systemSettings.degustacaoDays}
+                    onChange={(e) =>
+                      setSystemSettings({
+                        ...systemSettings,
+                        degustacaoDays: Math.max(1, parseInt(e.target.value, 10) || 30),
+                      })
+                    }
+                    className="w-24 px-3 py-1.5 text-xs rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white font-bold outline-none"
+                  />
+                  <span className="text-xs font-medium text-gray-500">dias</span>
+                </div>
+              </div>
+
+              {/* 3. Função e Plano Padrão para Novos Cadastros */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                    <UserCheck className="w-4 h-4 text-purple-500" />
+                    Função Padrão de Auto-Cadastro
+                  </label>
+                  <select
+                    value={systemSettings.defaultRole}
+                    onChange={(e) =>
+                      setSystemSettings({
+                        ...systemSettings,
+                        defaultRole: e.target.value as UserRole,
+                      })
+                    }
+                    className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white outline-none"
+                  >
+                    <option value="cliente">👤 Cliente (Acessa o painel e edita cartão)</option>
+                    <option value="degustador">🍷 Degustador (Apenas visualiza link e QR Code)</option>
+                  </select>
+                  <p className="text-[11px] text-gray-400">
+                    {systemSettings.defaultRole === 'degustador'
+                      ? 'No modo Degustador, o usuário não tem acesso ao painel de edição do cartão.'
+                      : 'No modo Cliente, o usuário pode personalizar seu próprio cartão pelo painel.'}
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                    <CreditCard className="w-4 h-4 text-emerald-500" />
+                    Plano Inicial Padrão
+                  </label>
+                  <select
+                    value={systemSettings.defaultPlan}
+                    onChange={(e) =>
+                      setSystemSettings({
+                        ...systemSettings,
+                        defaultPlan: e.target.value as UserPlan,
+                      })
+                    }
+                    className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white outline-none"
+                  >
+                    <option value="degustacao">Degustação ({systemSettings.degustacaoDays} dias)</option>
+                    <option value="profissional">Profissional</option>
+                    <option value="negocios_ia">Negócios & IA</option>
+                    <option value="corporativo">Corporativo</option>
+                  </select>
+                  <p className="text-[11px] text-gray-400">
+                    Plano atribuído automaticamente no momento do auto-cadastro.
+                  </p>
+                </div>
+              </div>
+
+              {/* 4. Permitir Auto-Cadastro Público */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-4">
+                <div className="space-y-0.5">
+                  <label className="text-sm font-bold text-gray-900 dark:text-white">
+                    Permitir Auto-Cadastro Aberto no Site
+                  </label>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Se desativado, o formulário de cadastro público rejeitará novas contas e orientará o usuário a contatar o Master.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSystemSettings({
+                      ...systemSettings,
+                      allowPublicRegistration: !systemSettings.allowPublicRegistration,
+                    })
+                  }
+                  className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    systemSettings.allowPublicRegistration ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                      systemSettings.allowPublicRegistration ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* 5. WhatsApp do Master para Notificações & Contato */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                  <MessageCircle className="w-4 h-4 text-emerald-500" />
+                  WhatsApp do Master para Liberações de Acesso
+                </label>
+                <input
+                  type="text"
+                  value={systemSettings.masterWhatsApp || ''}
+                  onChange={(e) =>
+                    setSystemSettings({ ...systemSettings, masterWhatsApp: e.target.value })
+                  }
+                  placeholder="+55 (15) 99625-9353"
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white outline-none font-mono"
+                />
+                <p className="text-[11px] text-gray-400">
+                  Número que receberá as mensagens dos clientes solicitando aprovação ou entrega de cartão.
+                </p>
+              </div>
+
+              {/* Ações do Modal */}
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-800">
+                <button
+                  type="button"
+                  onClick={() => setShowSettingsModal(false)}
+                  className="px-4 py-2.5 text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={settingsLoading}
+                  className="px-6 py-2.5 text-xs font-bold text-white bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 rounded-xl shadow-md transition disabled:opacity-50 flex items-center gap-2"
+                >
+                  <Check className="w-4 h-4" />
+                  {settingsLoading ? 'Salvando...' : 'Salvar Políticas de Cadastro'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

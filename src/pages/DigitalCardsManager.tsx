@@ -46,6 +46,8 @@ import {
   Shield,
   Users,
   UserPlus,
+  BookOpen,
+  HelpCircle,
 } from 'lucide-react';
 import { DigitalCard, CardMetrics, DigitalCardInquiry } from '../types.ts';
 import { PRESET_THEMES } from '../../shared/digital-card-appearance.ts';
@@ -55,6 +57,7 @@ import { ThemeToggle } from '../components/ThemeToggle.tsx';
 import { useAuth } from '../contexts/AuthContext.tsx';
 import { initSupabase, uploadCardAsset, mapDbToDigitalCard, mapDigitalCardToDb } from '../lib/supabase.ts';
 import { AdminUsersManager } from '../components/AdminUsersManager.tsx';
+import { HelpCenterModal } from '../components/HelpCenterModal.tsx';
 
 export const DigitalCardsManager: React.FC = () => {
   const { user, signOut, isConfigured, isMaster, isAdminOrMaster, role, plan } = useAuth();
@@ -65,6 +68,8 @@ export const DigitalCardsManager: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [editingCard, setEditingCard] = useState<Partial<DigitalCard> | null>(null);
   const [isNew, setIsNew] = useState(false);
+  const [isEditingLandingTemplate, setIsEditingLandingTemplate] = useState(false);
+  const [landingTemplateSuccessMessage, setLandingTemplateSuccessMessage] = useState<string | null>(null);
   const [activeAccordion, setActiveAccordion] = useState<number>(1);
   const [qrActiveTab, setQrActiveTab] = useState<'moldura' | 'forma' | 'logo'>('moldura');
   const [saving, setSaving] = useState(false);
@@ -72,6 +77,75 @@ export const DigitalCardsManager: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showResetModal, setShowResetModal] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [helpModalOpen, setHelpModalOpen] = useState(false);
+  const [helpArticleId, setHelpArticleId] = useState<string | undefined>(undefined);
+
+  // Inicia no modo de edição do modelo da Landing Page se solicitado por URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('modo') === 'landing-template' || params.get('modelo') === 'landing') {
+      handleStartEditLandingTemplate();
+    }
+  }, []);
+
+  const handleStartEditLandingTemplate = async () => {
+    try {
+      setLoading(true);
+      setErrorMessage(null);
+      setSaveSuccess(false);
+      const res = await fetch('/api/settings/landing-card');
+      if (res.ok) {
+        const template = await res.json();
+        setEditingCard(template);
+        setIsEditingLandingTemplate(true);
+        setIsNew(false);
+        setActiveTab('editor');
+        setMainView('cards');
+      } else {
+        throw new Error('Não foi possível carregar o modelo da Landing Page.');
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Erro ao carregar modelo da landing page.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleExitLandingTemplate = () => {
+    setIsEditingLandingTemplate(false);
+    if (cards.length > 0) {
+      setEditingCard(cards[0]);
+      loadCardDetails(cards[0].id);
+    } else {
+      handleNewCard();
+    }
+  };
+
+  const handleSetCurrentAsLandingTemplate = async () => {
+    if (!editingCard) return;
+    const confirmMsg = `Deseja definir este cartão ("${editingCard.name || 'Sem nome'}") como o Modelo Oficial de Demonstração na Landing Page?`;
+    if (!confirm(confirmMsg)) return;
+
+    try {
+      setSaving(true);
+      const res = await fetch('/api/settings/landing-card', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editingCard),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Erro ao definir modelo da landing page.');
+
+      broadcastCardUpdate({ ...(editingCard as DigitalCard), slug: editingCard.slug || 'jurandir-hora' });
+      setSaveSuccess(true);
+      setLandingTemplateSuccessMessage(`O cartão "${editingCard.name}" foi promovido com sucesso para Modelo Oficial da Landing Page!`);
+      setTimeout(() => setLandingTemplateSuccessMessage(null), 6000);
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Erro ao definir cartão como modelo.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   // Métricas e mensagens do cartão selecionado
   const [metrics, setMetrics] = useState<CardMetrics | null>(null);
@@ -406,9 +480,22 @@ export const DigitalCardsManager: React.FC = () => {
 
   // Auto-save debounced quando editingCard muda (se não for novo)
   useEffect(() => {
-    if (!editingCard || isNew || !editingCard.id) return;
+    if (!editingCard || (isNew && !isEditingLandingTemplate)) return;
     const timer = setTimeout(async () => {
       try {
+        if (isEditingLandingTemplate) {
+          const res = await fetch('/api/settings/landing-card', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(editingCard),
+          });
+          if (res.ok) {
+            const json = await res.json();
+            broadcastCardUpdate(json.template || (editingCard as DigitalCard));
+          }
+          return;
+        }
+
         let updated: DigitalCard | null = null;
         if (user) {
           const client = await initSupabase();
@@ -477,6 +564,28 @@ export const DigitalCardsManager: React.FC = () => {
     if (!editingCard) return;
     setResetting(true);
     setErrorMessage(null);
+
+    // Se estiver editando o modelo da landing page, usa o reset oficial de fábrica
+    if (isEditingLandingTemplate) {
+      try {
+        const res = await fetch('/api/settings/landing-card/reset', { method: 'POST' });
+        const json = await res.json();
+        if (res.ok && json.template) {
+          setEditingCard(json.template);
+          setSaveSuccess(true);
+          setLandingTemplateSuccessMessage('Modelo padrão da Landing Page restaurado para as configurações de fábrica!');
+          broadcastCardUpdate(json.template);
+          setTimeout(() => setLandingTemplateSuccessMessage(null), 6000);
+        }
+      } catch (err: any) {
+        console.error('Erro ao restaurar modelo da landing page:', err);
+        setErrorMessage('Erro ao restaurar modelo da landing page.');
+      } finally {
+        setResetting(false);
+        setShowResetModal(false);
+      }
+      return;
+    }
 
     const resetData: Partial<DigitalCard> = {
       ...editingCard,
@@ -591,6 +700,26 @@ export const DigitalCardsManager: React.FC = () => {
     setSaveSuccess(false);
 
     try {
+      // Se estiver no modo de edição do modelo da Landing Page
+      if (isEditingLandingTemplate) {
+        const res = await fetch('/api/settings/landing-card', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(editingCard),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || 'Erro ao salvar modelo da landing page.');
+
+        setSaveSuccess(true);
+        setLandingTemplateSuccessMessage('Modelo padrão da Landing Page salvo e publicado com sucesso!');
+        if (json.template) {
+          setEditingCard(json.template);
+        }
+        broadcastCardUpdate(json.template || (editingCard as DigitalCard));
+        setTimeout(() => setLandingTemplateSuccessMessage(null), 6000);
+        return;
+      }
+
       let savedCard: DigitalCard;
 
       if (user) {
@@ -717,54 +846,83 @@ export const DigitalCardsManager: React.FC = () => {
     <div className="min-h-screen bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-100 transition-colors">
       {/* Top Navbar */}
       <header className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-30 shadow-xs transition-colors">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-sky-700 text-white flex items-center justify-center font-bold shadow-md shadow-sky-700/20">
+        <div className="w-full max-w-7xl 2xl:max-w-[1600px] mx-auto px-4 sm:px-6 py-3 min-h-[4.25rem] flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-sky-700 text-white flex items-center justify-center font-bold shadow-md shadow-sky-700/20 shrink-0">
               <Layers size={22} />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-base sm:text-lg font-black text-slate-900 dark:text-white tracking-tight font-heading">
+                <h1 className="text-base sm:text-lg font-black text-slate-900 dark:text-white tracking-tight font-heading leading-tight whitespace-nowrap">
                   Painel de Cartões Digitais
                 </h1>
                 {isMaster && (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-black bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/40 shadow-xs">
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-black bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/40 shadow-xs shrink-0">
                     <Crown size={12} className="text-amber-500" />
                     Master
                   </span>
                 )}
                 {!isMaster && role === 'admin' && (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30">
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30 shrink-0">
                     <Shield size={12} className="text-blue-500" />
                     Admin
                   </span>
                 )}
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
+              <p className="text-xs text-slate-500 dark:text-slate-400 truncate max-w-[220px] sm:max-w-[320px]">
                 {user ? `Conectado como ${user.email}` : 'Gestão profissional e métricas'}
               </p>
             </div>
           </div>
 
-          {/* Navegação entre Cartões e Gestão de Usuários (Master & Admin) */}
+          {/* Navegação entre Cartões, Modelo Landing Page e Gestão de Usuários (Master & Admin) */}
           {isAdminOrMaster && (
-            <div className="hidden md:flex items-center bg-slate-100 dark:bg-slate-900/70 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
+            <div className="hidden xl:flex items-center bg-slate-100 dark:bg-slate-900/70 p-1 rounded-xl border border-slate-200 dark:border-slate-700 shrink-0">
               <button
                 type="button"
-                onClick={() => setMainView('cards')}
+                onClick={() => {
+                  setIsEditingLandingTemplate(false);
+                  setMainView('cards');
+                  if (cards.length > 0 && (!editingCard || isEditingLandingTemplate)) {
+                    setEditingCard(cards[0]);
+                    loadCardDetails(cards[0].id);
+                  }
+                }}
                 className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  mainView === 'cards'
+                  mainView === 'cards' && !isEditingLandingTemplate
                     ? 'bg-white dark:bg-slate-800 text-sky-700 dark:text-sky-300 shadow-xs'
                     : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
                 <Layers size={14} />
-                <span>Cartões Digitais ({cards.length})</span>
+                <span>Cartões ({cards.length})</span>
               </button>
+
+              {isMaster && (
+                <button
+                  type="button"
+                  onClick={handleStartEditLandingTemplate}
+                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    isEditingLandingTemplate
+                      ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-xs'
+                      : 'text-purple-700 dark:text-purple-300 hover:text-purple-900 dark:hover:text-white hover:bg-purple-50 dark:hover:bg-purple-950/40'
+                  }`}
+                  title="Editar o modelo de demonstração que aparece na Landing Page"
+                >
+                  <Sparkles size={14} className={isEditingLandingTemplate ? 'text-amber-300' : 'text-purple-600 dark:text-purple-400'} />
+                  <span>Modelo Landing Page</span>
+                  <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-purple-200 text-purple-900 dark:bg-purple-900 dark:text-purple-100 font-black">
+                    Demo
+                  </span>
+                </button>
+              )}
 
               <button
                 type="button"
-                onClick={() => setMainView('users')}
+                onClick={() => {
+                  setIsEditingLandingTemplate(false);
+                  setMainView('users');
+                }}
                 className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   mainView === 'users'
                     ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-xs'
@@ -780,7 +938,20 @@ export const DigitalCardsManager: React.FC = () => {
             </div>
           )}
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                setHelpArticleId(undefined);
+                setHelpModalOpen(true);
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/60 hover:bg-sky-100 dark:hover:bg-sky-900/80 text-sky-700 dark:text-sky-300 transition-colors shadow-xs cursor-pointer"
+              title="Abrir Central de Ajuda e Documentação do Software"
+            >
+              <BookOpen size={15} className="text-sky-600 dark:text-sky-400" />
+              <span className="hidden sm:inline">Ajuda & Docs</span>
+            </button>
+
             <a
               href="/"
               className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-colors shadow-xs"
@@ -816,14 +987,21 @@ export const DigitalCardsManager: React.FC = () => {
         </div>
       </header>
 
-      {/* Navegação Mobile para Master & Admin */}
+      {/* Navegação para Telas Menores que XL (Master & Admin) */}
       {isAdminOrMaster && (
-        <div className="md:hidden max-w-7xl mx-auto px-4 pt-3 flex gap-2">
+        <div className="xl:hidden max-w-7xl 2xl:max-w-[1600px] mx-auto px-4 sm:px-6 pt-3 flex gap-2 overflow-x-auto pb-1">
           <button
             type="button"
-            onClick={() => setMainView('cards')}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold cursor-pointer ${
-              mainView === 'cards'
+            onClick={() => {
+              setIsEditingLandingTemplate(false);
+              setMainView('cards');
+              if (cards.length > 0 && (!editingCard || isEditingLandingTemplate)) {
+                setEditingCard(cards[0]);
+                loadCardDetails(cards[0].id);
+              }
+            }}
+            className={`flex-1 min-w-[110px] flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl text-xs font-bold cursor-pointer shrink-0 ${
+              mainView === 'cards' && !isEditingLandingTemplate
                 ? 'bg-sky-600 text-white shadow-xs'
                 : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
             }`}
@@ -831,23 +1009,42 @@ export const DigitalCardsManager: React.FC = () => {
             <Layers size={14} />
             <span>Cartões ({cards.length})</span>
           </button>
+
+          {isMaster && (
+            <button
+              type="button"
+              onClick={handleStartEditLandingTemplate}
+              className={`flex-1 min-w-[130px] flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl text-xs font-bold cursor-pointer shrink-0 ${
+                isEditingLandingTemplate
+                  ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-xs'
+                  : 'bg-white dark:bg-slate-800 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800'
+              }`}
+            >
+              <Sparkles size={14} className={isEditingLandingTemplate ? 'text-amber-300' : 'text-purple-600'} />
+              <span>Modelo Demo</span>
+            </button>
+          )}
+
           <button
             type="button"
-            onClick={() => setMainView('users')}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold cursor-pointer ${
+            onClick={() => {
+              setIsEditingLandingTemplate(false);
+              setMainView('users');
+            }}
+            className={`flex-1 min-w-[120px] flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl text-xs font-bold cursor-pointer shrink-0 ${
               mainView === 'users'
                 ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-xs'
                 : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
             }`}
           >
             <Crown size={14} />
-            <span>Usuários & Planos</span>
+            <span>Usuários</span>
           </button>
         </div>
       )}
 
       {/* Main Container */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+      <div className="w-full max-w-7xl 2xl:max-w-[1600px] mx-auto px-4 sm:px-6 py-6">
         {mainView === 'users' && isAdminOrMaster ? (
           <AdminUsersManager
             onSelectUserCards={(userId, email) => {
@@ -1034,16 +1231,42 @@ export const DigitalCardsManager: React.FC = () => {
                   </>
                 )}
 
+                <button
+                  type="button"
+                  onClick={() => {
+                    setHelpArticleId('02-passo-a-passo');
+                    setHelpModalOpen(true);
+                  }}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold text-sky-700 dark:text-sky-300 bg-sky-50/70 dark:bg-sky-950/40 hover:bg-sky-100 dark:hover:bg-sky-900/60 border border-sky-200 dark:border-sky-800/50 transition-colors cursor-pointer"
+                  title="Abrir Guia Passo a Passo de Criação de Cartões"
+                >
+                  <HelpCircle size={14} className="text-sky-600" />
+                  <span>Guia de Criação</span>
+                </button>
+
                 {/* Botões de Ação de Barra Superior */}
-                <div className="ml-auto flex items-center gap-2">
+                <div className="ml-auto flex items-center gap-2 flex-wrap">
+                  {isMaster && !isEditingLandingTemplate && (
+                    <button
+                      type="button"
+                      onClick={handleSetCurrentAsLandingTemplate}
+                      disabled={saving}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border border-purple-200 dark:border-purple-800 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/40 dark:hover:bg-purple-900/60 text-purple-700 dark:text-purple-300 transition-all cursor-pointer shadow-xs"
+                      title="Copiar as configurações e imagens deste cartão para ser o modelo oficial da Landing Page"
+                    >
+                      <Sparkles size={13} className="text-purple-600" />
+                      <span>Definir como Modelo da Home</span>
+                    </button>
+                  )}
+
                   <button
                     type="button"
                     onClick={() => setShowResetModal(true)}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-all cursor-pointer shadow-xs"
-                    title="Voltar o cartão ao estado original sem imagens e com a estrutura básica"
+                    title={isEditingLandingTemplate ? "Restaurar o modelo da Landing Page para o padrão de fábrica" : "Voltar o cartão ao estado original sem imagens e com a estrutura básica"}
                   >
                     <RotateCcw size={13} className="text-slate-500 dark:text-slate-400" />
-                    <span>Restaurar Padrão (Default)</span>
+                    <span>{isEditingLandingTemplate ? 'Restaurar Padrão de Fábrica' : 'Restaurar Padrão (Default)'}</span>
                   </button>
 
                   <button
@@ -1062,7 +1285,52 @@ export const DigitalCardsManager: React.FC = () => {
                 </div>
               </div>
 
-              {saveSuccess && (
+              {/* Banner Exclusivo: Editando Modelo da Landing Page */}
+              {isEditingLandingTemplate && (
+                <div className="mb-4 p-4 rounded-2xl bg-gradient-to-r from-purple-900 via-indigo-900 to-sky-900 text-white shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-amber-400/20 text-amber-300 border border-amber-400/30 flex items-center justify-center shrink-0">
+                      <Sparkles size={18} />
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+                        <Crown size={12} />
+                        <span>Modo Master: Modelo Padrão da Landing Page</span>
+                      </div>
+                      <p className="text-xs text-slate-200 leading-snug mt-0.5">
+                        As alterações feitas aqui definirão o cartão interativo, imagens, QR Code e botões da página inicial pública.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                    <a
+                      href="/"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold border border-white/20 transition-all flex items-center gap-1.5"
+                    >
+                      <span>Ver Landing Page</span>
+                      <ExternalLink size={12} />
+                    </a>
+                    <button
+                      type="button"
+                      onClick={handleExitLandingTemplate}
+                      className="px-3 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-bold transition-all shadow-xs cursor-pointer"
+                    >
+                      Voltar aos Meus Cartões
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {landingTemplateSuccessMessage && (
+                <div className="mb-4 p-3 rounded-xl bg-purple-50 dark:bg-purple-950/50 border border-purple-200 dark:border-purple-800 text-purple-900 dark:text-purple-200 text-xs flex items-center gap-2 shadow-xs">
+                  <Sparkles size={16} className="text-purple-600 dark:text-purple-400 shrink-0" />
+                  <span className="font-semibold">{landingTemplateSuccessMessage}</span>
+                </div>
+              )}
+
+              {saveSuccess && !landingTemplateSuccessMessage && (
                 <div className="mb-4 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2">
                   <CheckCircle2 size={16} className="text-emerald-600" />
                   <span>Cartão salvo com sucesso! As alterações já estão ao vivo.</span>
@@ -1242,6 +1510,35 @@ export const DigitalCardsManager: React.FC = () => {
                               placeholder="URL da foto (https://...)"
                               className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white"
                             />
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3 pt-1">
+                            <div>
+                              <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                                Foco Foto X ({editingCard.imageFocusX ?? 50}%)
+                              </label>
+                              <input
+                                type="range"
+                                min="0"
+                                max="100"
+                                value={editingCard.imageFocusX ?? 50}
+                                onChange={(e) => setEditingCard({ ...editingCard, imageFocusX: parseInt(e.target.value, 10) })}
+                                className="w-full cursor-pointer accent-sky-600"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                                Foco Foto Y ({editingCard.imageFocusY ?? 50}%)
+                              </label>
+                              <input
+                                type="range"
+                                min="0"
+                                max="100"
+                                value={editingCard.imageFocusY ?? 50}
+                                onChange={(e) => setEditingCard({ ...editingCard, imageFocusY: parseInt(e.target.value, 10) })}
+                                className="w-full cursor-pointer accent-sky-600"
+                              />
+                            </div>
                           </div>
                         </div>
 
@@ -4149,8 +4446,8 @@ export const DigitalCardsManager: React.FC = () => {
                   </div>
 
                   {/* Botões de Ação do Formulário */}
-                  <div className="pt-4 flex items-center justify-between">
-                    {!isNew && (
+                  <div className="pt-4 flex items-center justify-between gap-3">
+                    {!isNew && !isEditingLandingTemplate && (
                       <button
                         type="button"
                         onClick={() => handleDeleteCard(editingCard.id!)}
@@ -4161,13 +4458,35 @@ export const DigitalCardsManager: React.FC = () => {
                       </button>
                     )}
 
+                    {isEditingLandingTemplate && (
+                      <button
+                        type="button"
+                        onClick={handleExitLandingTemplate}
+                        className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer"
+                      >
+                        Voltar aos Meus Cartões
+                      </button>
+                    )}
+
                     <button
                       type="submit"
                       disabled={saving}
-                      className="ml-auto px-6 py-2.5 rounded-xl text-xs font-bold text-white bg-sky-600 hover:bg-sky-700 disabled:opacity-50 transition-colors flex items-center gap-2 shadow-md cursor-pointer"
+                      className={`ml-auto px-6 py-2.5 rounded-xl text-xs font-bold text-white transition-all flex items-center gap-2 shadow-md cursor-pointer ${
+                        isEditingLandingTemplate
+                          ? 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700'
+                          : 'bg-sky-600 hover:bg-sky-700'
+                      } disabled:opacity-50`}
                     >
-                      <Save size={16} />
-                      <span>{saving ? 'Salvando...' : isNew ? 'Criar Cartão' : 'Salvar Alterações'}</span>
+                      {isEditingLandingTemplate ? <Sparkles size={16} className="text-amber-300" /> : <Save size={16} />}
+                      <span>
+                        {saving
+                          ? 'Salvando...'
+                          : isEditingLandingTemplate
+                          ? 'Salvar Modelo da Landing Page'
+                          : isNew
+                          ? 'Criar Cartão'
+                          : 'Salvar Alterações'}
+                      </span>
                     </button>
                   </div>
                 </form>
@@ -4418,6 +4737,12 @@ export const DigitalCardsManager: React.FC = () => {
         )}
           </>
         )}
+        {/* Modal de Central de Ajuda e Documentação */}
+        <HelpCenterModal
+          isOpen={helpModalOpen}
+          onClose={() => setHelpModalOpen(false)}
+          initialArticleId={helpArticleId}
+        />
       </div>
     </div>
   );

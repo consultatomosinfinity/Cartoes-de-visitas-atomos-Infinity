@@ -20,7 +20,7 @@ import {
   Send,
 } from 'lucide-react';
 import { DigitalCard } from '../types.ts';
-import { getContrastTextColor, isConfiguredLink, hexToRgba, getCardContentContrastColors } from '../../shared/digital-card-appearance.ts';
+import { getContrastTextColor, isConfiguredLink, hexToRgba, getCardContentContrastColors, isNeumorphismTheme, getNeumorphicCardStyles, isGlassmorphismTheme, getGlassmorphicCardStyles } from '../../shared/digital-card-appearance.ts';
 import { parseAiAgentInput, getAiAgentButtonGlowClass, getAiAgentButtonPaddingY } from '../../shared/digital-card-ai-agent.ts';
 import { DigitalCardDualPorthole } from './DigitalCardDualPorthole.tsx';
 import { DigitalCardQrCode } from './DigitalCardQrCode.tsx';
@@ -142,6 +142,18 @@ export const DigitalCardLivePreview: React.FC<DigitalCardLivePreviewProps> = ({ 
 
   const headerTextColor = getContrastTextColor(card.backgroundColor || '#12375B');
   const actionButtonTextColor = getContrastTextColor(card.buttonColor || '#1A7FBE');
+
+  const isGlass = isGlassmorphismTheme(card.appearanceTheme);
+  const isGlassDark = card.appearanceTheme === 'glass_dark';
+  const glassStyles = getGlassmorphicCardStyles(isGlassDark);
+
+  const bgStyle = isGlass
+    ? glassStyles.cardBg
+    : hexToRgba(card.contentColor || '#FFFFFF', (card.contentOpacity ?? 100) / 100);
+
+  const headerBg = isGlass
+    ? (isGlassDark ? 'rgba(15, 23, 42, 0.45)' : 'rgba(255, 255, 255, 0.35)')
+    : hexToRgba(card.backgroundColor || '#12375B', (card.headerOpacity ?? 100) / 100);
 
   // Cores de contraste garantido para a área de conteúdo (formulário, consentimento, rótulos e rodapé)
   const contentContrast = getCardContentContrastColors({
@@ -395,7 +407,12 @@ export const DigitalCardLivePreview: React.FC<DigitalCardLivePreviewProps> = ({ 
           {/* TELA INTERNA DO DISPOSITIVO */}
           <div
             className={`w-full ${currentDevice.innerRadius} overflow-y-auto max-h-[620px] shadow-inner text-slate-800 scrollbar-thin flex flex-col relative`}
-            style={{ backgroundColor: card.bodyColor || '#EAF1F7', fontFamily: getFontFamily(card.fontFamily || 'sans') }}
+            style={{
+              backgroundColor: isGlassmorphismTheme(card.appearanceTheme)
+                ? (card.appearanceTheme === 'glass_dark' ? '#090D16' : '#0F172A')
+                : (card.bodyColor || '#EAF1F7'),
+              fontFamily: getFontFamily(card.fontFamily || 'sans')
+            }}
           >
             {/* Container do Cartão com suporte a Imagem de Fundo (se configurada) */}
             <div className="relative w-full flex flex-col min-h-full">
@@ -421,74 +438,87 @@ export const DigitalCardLivePreview: React.FC<DigitalCardLivePreviewProps> = ({ 
                 </div>
               )}
 
-              {/* CAMADA DE CONTEÚDO DO CARTÃO (com cor e transparência alpha) */}
+              {/* CAMADA DE CONTEÚDO DO CARTÃO (com cor, transparência alpha ou vidro) */}
               <div
-                className="relative z-10 w-full flex flex-col flex-1 min-h-full"
+                className="relative z-10 w-full flex flex-col flex-1 min-h-full transition-all"
                 style={{
-                  backgroundColor: hexToRgba(card.contentColor || '#FFFFFF', (card.contentOpacity ?? 100) / 100),
+                  backgroundColor: bgStyle,
+                  backdropFilter: isGlass ? glassStyles.backdropBlur : undefined,
+                  boxShadow: isGlass ? glassStyles.shadow : undefined,
+                  border: isGlass ? glassStyles.border : undefined,
                 }}
               >
-                {/* Header com Dual Porthole */}
-                <div
-                  className="pt-5 pb-4 px-4 text-center relative"
-                  style={{
-                    backgroundColor: hexToRgba(card.backgroundColor || '#12375B', (card.headerOpacity ?? 100) / 100),
-                    color: headerTextColor,
-                  }}
-                >
-                <DigitalCardDualPorthole
-                  imageUrl={card.imageUrl}
-                  name={card.name || 'Nome'}
-                  companyLogoUrl={card.companyLogoUrl}
-                  brandName={card.brandName}
-                  frameScale={card.frameScale || 97}
-                  companyLogoFocusX={card.companyLogoFocusX || 56}
-                  companyLogoFocusY={card.companyLogoFocusY || 67}
-                  borderColor={card.contentColor || '#FFFFFF'}
-                />
+                    {/* Header com Dual Porthole */}
+                    <div
+                      className="pt-5 pb-4 px-4 text-center relative transition-all"
+                      style={{
+                        backgroundColor: headerBg,
+                        backdropFilter: isGlass ? 'blur(12px)' : undefined,
+                        borderBottom: isGlass ? glassStyles.borderSubtle : undefined,
+                        color: headerTextColor,
+                      }}
+                    >
+                      <DigitalCardDualPorthole
+                        imageUrl={card.imageUrl}
+                        name={card.name || 'Nome'}
+                        companyLogoUrl={card.companyLogoUrl}
+                        brandName={card.brandName}
+                        frameScale={card.frameScale || 97}
+                        imageFocusX={card.imageFocusX ?? 50}
+                        imageFocusY={card.imageFocusY ?? 50}
+                        companyLogoFocusX={card.companyLogoFocusX || 56}
+                        companyLogoFocusY={card.companyLogoFocusY || 67}
+                        borderColor={card.contentColor || '#FFFFFF'}
+                      />
 
-                <h1 className="text-base sm:text-lg font-black tracking-tight uppercase font-heading">
-                  {card.brandName || card.name || 'Sua Empresa'}
-                </h1>
-                <p className="text-xs sm:text-sm font-semibold opacity-95">
-                  {card.name || 'Seu Nome Completo'}
-                </p>
-                {card.jobTitle && (
-                  <p className="text-[10px] sm:text-[11px] opacity-80 mt-0.5 tracking-wider uppercase font-medium">
-                    {card.jobTitle}
-                  </p>
-                )}
-              </div>
+                      <h1 className="text-base sm:text-lg font-black tracking-tight uppercase font-heading">
+                        {card.brandName || card.name || 'Sua Empresa'}
+                      </h1>
+                      <p className="text-xs sm:text-sm font-semibold opacity-95">
+                        {card.name || 'Seu Nome Completo'}
+                      </p>
+                      {card.jobTitle && (
+                        <p className="text-[10px] sm:text-[11px] opacity-80 mt-0.5 tracking-wider uppercase font-medium">
+                          {card.jobTitle}
+                        </p>
+                      )}
+                    </div>
 
               {/* Botões de Ação */}
               {(() => {
+                const isNeu = isNeumorphismTheme(card.appearanceTheme);
+                const isNeuDark = card.appearanceTheme === 'neumorphism_dark';
+                const neuStyles = getNeumorphicCardStyles(isNeuDark);
+
                 const globalRadius = card.buttonsBorderRadius ?? 16;
                 const vcardRadius = card.vcardButtonBorderRadius ?? globalRadius;
                 const whatsappRadius = card.whatsappButtonBorderRadius ?? globalRadius;
                 const pwaRadius = card.pwaButtonBorderRadius ?? globalRadius;
                 const aiAgentRadius = card.aiAgentButtonBorderRadius ?? globalRadius;
 
-                const vcardBg = card.vcardButtonColor || card.buttonColor || '#1A7FBE';
-                const vcardText = card.vcardButtonTextColor || actionButtonTextColor;
+                const vcardBg = card.vcardButtonColor || card.buttonColor || (isNeu ? neuStyles.bg : '#1A7FBE');
+                const vcardText = card.vcardButtonTextColor || (isNeu && !card.vcardButtonColor && !card.buttonColor ? neuStyles.textColor : actionButtonTextColor);
 
-                const whatsappBg = card.whatsappButtonColor || '#059669';
-                const whatsappText = card.whatsappButtonTextColor || '#FFFFFF';
+                const whatsappBg = card.whatsappButtonColor || (isNeu ? neuStyles.bg : '#059669');
+                const whatsappText = card.whatsappButtonTextColor || (isNeu && !card.whatsappButtonColor ? (isNeuDark ? '#34D399' : '#059669') : '#FFFFFF');
 
-                const pwaBg = card.pwaButtonColor || '#0F172A';
-                const pwaText = card.pwaButtonTextColor || '#FFFFFF';
+                const pwaBg = card.pwaButtonColor || (isNeu ? neuStyles.bg : '#0F172A');
+                const pwaText = card.pwaButtonTextColor || (isNeu && !card.pwaButtonColor ? neuStyles.textColor : '#FFFFFF');
 
-                const aiAgentBg = card.aiAgentButtonColor || '#7C3AED';
-                const aiAgentText = card.aiAgentButtonTextColor || '#FFFFFF';
+                const aiAgentBg = card.aiAgentButtonColor || (isNeu ? neuStyles.bg : '#7C3AED');
+                const aiAgentText = card.aiAgentButtonTextColor || (isNeu && !card.aiAgentButtonColor ? (isNeuDark ? '#C084FC' : '#7C3AED') : '#FFFFFF');
 
                 return (
-                  <div className="px-3.5 py-3 flex flex-col gap-2">
+                  <div className="px-3.5 py-3 flex flex-col gap-2.5">
                     <button
                       type="button"
-                      className="w-full flex items-center justify-center gap-2 py-2.5 px-3 font-bold text-xs shadow-xs"
+                      className="w-full flex items-center justify-center gap-2 py-2.5 px-3 font-bold text-xs transition-all"
                       style={{
                         backgroundColor: vcardBg,
                         color: vcardText,
                         borderRadius: `${Math.round(vcardRadius * 0.85)}px`,
+                        boxShadow: isNeu ? neuStyles.raised : '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+                        border: isNeu ? neuStyles.border : undefined,
                       }}
                     >
                       <Download size={14} />
@@ -497,11 +527,13 @@ export const DigitalCardLivePreview: React.FC<DigitalCardLivePreviewProps> = ({ 
 
                     <button
                       type="button"
-                      className="w-full flex items-center justify-center gap-2 py-2.5 px-3 font-bold text-xs shadow-xs"
+                      className="w-full flex items-center justify-center gap-2 py-2.5 px-3 font-bold text-xs transition-all"
                       style={{
                         backgroundColor: whatsappBg,
                         color: whatsappText,
                         borderRadius: `${Math.round(whatsappRadius * 0.85)}px`,
+                        boxShadow: isNeu ? neuStyles.raised : '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+                        border: isNeu ? neuStyles.border : undefined,
                       }}
                     >
                       <Share2 size={14} />
@@ -514,11 +546,13 @@ export const DigitalCardLivePreview: React.FC<DigitalCardLivePreviewProps> = ({ 
                       return (
                         <button
                           type="button"
-                          className="w-full flex items-center justify-center gap-2 py-2.5 px-3 font-bold text-xs shadow-xs"
+                          className="w-full flex items-center justify-center gap-2 py-2.5 px-3 font-bold text-xs transition-all"
                           style={{
                             backgroundColor: pwaBg,
                             color: pwaText,
                             borderRadius: `${Math.round(pwaRadius * 0.85)}px`,
+                            boxShadow: isNeu ? neuStyles.raised : '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+                            border: isNeu ? neuStyles.border : undefined,
                           }}
                         >
                           <Smartphone size={14} />
@@ -536,16 +570,17 @@ export const DigitalCardLivePreview: React.FC<DigitalCardLivePreviewProps> = ({ 
                       return (
                         <button
                           type="button"
-                          className={`w-full flex items-center justify-center gap-2 px-3 font-bold text-xs shadow-xs relative overflow-hidden ${glowClass}`}
+                          className={`w-full flex items-center justify-center gap-2 px-3 font-bold text-xs relative overflow-hidden transition-all ${glowClass}`}
                           style={{
                             backgroundColor: aiAgentBg,
                             color: aiAgentText,
                             borderRadius: `${Math.round(aiAgentRadius * 0.85)}px`,
                             paddingTop: `${previewPaddingY}px`,
                             paddingBottom: `${previewPaddingY}px`,
-                            borderWidth: borderWidth > 0 ? `${Math.max(1, Math.round(borderWidth * 0.8))}px` : undefined,
-                            borderStyle: borderWidth > 0 ? 'solid' : undefined,
-                            borderColor: borderWidth > 0 ? borderColor : undefined,
+                            boxShadow: isNeu ? neuStyles.raised : '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+                            borderWidth: borderWidth > 0 ? `${Math.max(1, Math.round(borderWidth * 0.8))}px` : (isNeu ? '1px' : undefined),
+                            borderStyle: (borderWidth > 0 || isNeu) ? 'solid' : undefined,
+                            borderColor: borderWidth > 0 ? borderColor : (isNeu ? (isNeuDark ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.7)') : undefined),
                           }}
                         >
                           <Bot size={previewPaddingY >= 13 ? 16 : 14} className="shrink-0" />
@@ -562,7 +597,7 @@ export const DigitalCardLivePreview: React.FC<DigitalCardLivePreviewProps> = ({ 
 
               {/* Resumo */}
               {hasSummary && (
-                <div className="px-4 py-2 text-center border-t border-slate-100">
+                <div className="px-4 py-2 text-center border-t border-slate-100/50">
                   <p className="text-xs leading-relaxed italic" style={{ color: summaryTextColor }}>
                     "{card.summary}"
                   </p>
@@ -570,70 +605,137 @@ export const DigitalCardLivePreview: React.FC<DigitalCardLivePreviewProps> = ({ 
               )}
 
               {/* Contatos - Somente se houver canais preenchidos */}
-              {hasContacts && (
-                <div className="px-3.5 py-3 flex flex-col gap-1.5 border-t border-slate-100">
-                  {hasWhatsapp && (
-                    <div className="flex items-center gap-2 p-2 rounded-lg bg-slate-50 text-xs">
-                      <MessageCircle size={14} className="text-emerald-600 shrink-0" />
-                      <span className="truncate">{card.whatsappPhone}</span>
-                    </div>
-                  )}
-                  {hasPhone && (
-                    <div className="flex items-center gap-2 p-2 rounded-lg bg-slate-50 text-xs">
-                      <Phone size={14} className="text-blue-600 shrink-0" />
-                      <span className="truncate">{card.phone}</span>
-                    </div>
-                  )}
-                  {hasEmail && (
-                    <div className="flex items-center gap-2 p-2 rounded-lg bg-slate-50 text-xs">
-                      <Mail size={14} className="text-indigo-600 shrink-0" />
-                      <span className="truncate">{card.email}</span>
-                    </div>
-                  )}
-                  {hasWebsite && (
-                    <div className="flex items-center gap-2 p-2 rounded-lg bg-slate-50 text-xs">
-                      <Globe size={14} className="text-sky-600 shrink-0" />
-                      <span className="truncate">{card.websiteUrl}</span>
-                    </div>
-                  )}
-                  {hasAddress && (
-                    <div className="flex items-center gap-2 p-2 rounded-lg bg-slate-50 text-xs">
-                      <MapPin size={14} className="text-rose-600 shrink-0" />
-                      <span className="truncate">
-                        {[card.address, card.city].filter(Boolean).join(', ')}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              )}
+              {hasContacts && (() => {
+                const isNeu = isNeumorphismTheme(card.appearanceTheme);
+                const isNeuDark = card.appearanceTheme === 'neumorphism_dark';
+                const neuStyles = getNeumorphicCardStyles(isNeuDark);
+                const itemBg = isNeu ? neuStyles.bg : undefined;
+                const itemShadow = isNeu ? neuStyles.raisedSubtle : undefined;
+                const itemBorder = isNeu ? neuStyles.border : undefined;
+                const itemColor = isNeu ? neuStyles.textColor : undefined;
 
-              {/* Redes Sociais - Somente se houver redes preenchidas */}
-              {hasSocial && (
-                <div className="px-4 py-3 border-t border-slate-100 text-center">
-                  <div className="flex items-center justify-center gap-2">
-                    {hasInstagram && (
-                      <div className="w-7 h-7 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center" title="Instagram">
-                        <Instagram size={13} />
+                return (
+                  <div className="px-3.5 py-3 flex flex-col gap-2 border-t border-slate-100/50">
+                    {hasWhatsapp && (
+                      <div
+                        className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 text-xs transition-all"
+                        style={{ backgroundColor: itemBg, boxShadow: itemShadow, border: itemBorder, color: itemColor }}
+                      >
+                        <MessageCircle size={14} className="text-emerald-500 shrink-0" />
+                        <span className="truncate font-medium">{card.whatsappPhone}</span>
                       </div>
                     )}
-                    {hasLinkedin && (
-                      <div className="w-7 h-7 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center" title="LinkedIn">
-                        <Linkedin size={13} />
+                    {hasPhone && (
+                      <div
+                        className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 text-xs transition-all"
+                        style={{ backgroundColor: itemBg, boxShadow: itemShadow, border: itemBorder, color: itemColor }}
+                      >
+                        <Phone size={14} className="text-blue-500 shrink-0" />
+                        <span className="truncate font-medium">{card.phone}</span>
                       </div>
                     )}
-                    {hasFacebook && (
-                      <div className="w-7 h-7 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center" title="Facebook">
-                        <Facebook size={13} />
+                    {hasEmail && (
+                      <div
+                        className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 text-xs transition-all"
+                        style={{ backgroundColor: itemBg, boxShadow: itemShadow, border: itemBorder, color: itemColor }}
+                      >
+                        <Mail size={14} className="text-indigo-500 shrink-0" />
+                        <span className="truncate font-medium">{card.email}</span>
                       </div>
                     )}
-                    {hasYoutube && (
-                      <div className="w-7 h-7 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center" title="YouTube">
-                        <Youtube size={13} />
+                    {hasWebsite && (
+                      <div
+                        className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 text-xs transition-all"
+                        style={{ backgroundColor: itemBg, boxShadow: itemShadow, border: itemBorder, color: itemColor }}
+                      >
+                        <Globe size={14} className="text-sky-500 shrink-0" />
+                        <span className="truncate font-medium">{card.websiteUrl}</span>
+                      </div>
+                    )}
+                    {hasAddress && (
+                      <div
+                        className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 text-xs transition-all"
+                        style={{ backgroundColor: itemBg, boxShadow: itemShadow, border: itemBorder, color: itemColor }}
+                      >
+                        <MapPin size={14} className="text-rose-500 shrink-0" />
+                        <span className="truncate font-medium">
+                          {[card.address, card.city].filter(Boolean).join(', ')}
+                        </span>
                       </div>
                     )}
                   </div>
-                </div>
-              )}
+                );
+              })()}
+
+              {/* Redes Sociais - Somente se houver redes preenchidas */}
+              {hasSocial && (() => {
+                const isNeu = isNeumorphismTheme(card.appearanceTheme);
+                const isNeuDark = card.appearanceTheme === 'neumorphism_dark';
+                const neuStyles = getNeumorphicCardStyles(isNeuDark);
+
+                return (
+                  <div className="px-4 py-3 border-t border-slate-100/50 text-center">
+                    <div className="flex items-center justify-center gap-2.5">
+                      {hasInstagram && (
+                        <div
+                          className="w-8 h-8 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center transition-all"
+                          style={{
+                            backgroundColor: isNeu ? neuStyles.bg : undefined,
+                            boxShadow: isNeu ? neuStyles.raisedSubtle : undefined,
+                            border: isNeu ? neuStyles.border : undefined,
+                            color: isNeu ? neuStyles.textColor : undefined,
+                          }}
+                          title="Instagram"
+                        >
+                          <Instagram size={14} />
+                        </div>
+                      )}
+                      {hasLinkedin && (
+                        <div
+                          className="w-8 h-8 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center transition-all"
+                          style={{
+                            backgroundColor: isNeu ? neuStyles.bg : undefined,
+                            boxShadow: isNeu ? neuStyles.raisedSubtle : undefined,
+                            border: isNeu ? neuStyles.border : undefined,
+                            color: isNeu ? neuStyles.textColor : undefined,
+                          }}
+                          title="LinkedIn"
+                        >
+                          <Linkedin size={14} />
+                        </div>
+                      )}
+                      {hasFacebook && (
+                        <div
+                          className="w-8 h-8 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center transition-all"
+                          style={{
+                            backgroundColor: isNeu ? neuStyles.bg : undefined,
+                            boxShadow: isNeu ? neuStyles.raisedSubtle : undefined,
+                            border: isNeu ? neuStyles.border : undefined,
+                            color: isNeu ? neuStyles.textColor : undefined,
+                          }}
+                          title="Facebook"
+                        >
+                          <Facebook size={14} />
+                        </div>
+                      )}
+                      {hasYoutube && (
+                        <div
+                          className="w-8 h-8 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center transition-all"
+                          style={{
+                            backgroundColor: isNeu ? neuStyles.bg : undefined,
+                            boxShadow: isNeu ? neuStyles.raisedSubtle : undefined,
+                            border: isNeu ? neuStyles.border : undefined,
+                            color: isNeu ? neuStyles.textColor : undefined,
+                          }}
+                          title="YouTube"
+                        >
+                          <Youtube size={14} />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* QR Code */}
               <div
@@ -671,100 +773,129 @@ export const DigitalCardLivePreview: React.FC<DigitalCardLivePreviewProps> = ({ 
               </div>
 
               {/* Formulário de Primeiro Contato (se habilitado e não oculto) */}
-              {card.inquiryEnabled !== false && !card.hideInquiryForm && (
-                <div className="px-4 py-3 border-t border-slate-100/50">
-                  <div className="text-[11px] font-bold uppercase tracking-wider mb-1 flex items-center gap-1.5" style={{ color: contentContrast.titleColor }}>
-                    <Send size={12} className="text-sky-500" />
-                    <span>Enviar uma mensagem</span>
-                  </div>
-                  <p className="text-[10px] mb-2.5" style={{ color: contentContrast.subtitleColor }}>
-                    Deixe um recado diretamente para {card.name || 'o titular'}.
-                  </p>
+              {card.inquiryEnabled !== false && !card.hideInquiryForm && (() => {
+                const isNeu = isNeumorphismTheme(card.appearanceTheme);
+                const isNeuDark = card.appearanceTheme === 'neumorphism_dark';
+                const neuStyles = getNeumorphicCardStyles(isNeuDark);
 
-                  <div className="space-y-2">
-                    {card.inquiryShowName !== false && (
-                      <div>
-                        <label className="block text-[10px] font-semibold mb-0.5" style={{ color: contentContrast.labelColor }}>
-                          Seu Nome (opcional)
-                        </label>
-                        <div className="w-full px-2.5 py-1.5 text-[10px] rounded-lg border border-slate-200 bg-slate-50 text-slate-400">
-                          Ex: Maria Santos
-                        </div>
-                      </div>
-                    )}
+                const fieldBg = isNeu ? (isNeuDark ? '#14161D' : '#E0E5EC') : undefined;
+                const fieldShadow = isNeu ? neuStyles.inset : undefined;
+                const fieldBorder = isNeu ? neuStyles.border : undefined;
 
-                    <div className="grid grid-cols-2 gap-1.5">
-                      {card.inquiryShowEmail !== false && (
-                        <div>
-                          <label className="block text-[10px] font-semibold mb-0.5" style={{ color: contentContrast.labelColor }}>
-                            E-mail *
-                          </label>
-                          <div className="w-full px-2 py-1.5 text-[10px] rounded-lg border border-slate-200 bg-slate-50 text-slate-400 truncate">
-                            seu@email.com
-                          </div>
-                        </div>
-                      )}
-                      {card.inquiryShowPhone !== false && (
-                        <div>
-                          <label className="block text-[10px] font-semibold mb-0.5" style={{ color: contentContrast.labelColor }}>
-                            WhatsApp *
-                          </label>
-                          <div className="w-full px-2 py-1.5 text-[10px] rounded-lg border border-slate-200 bg-slate-50 text-slate-400 truncate">
-                            (11) 99999-9999
-                          </div>
-                        </div>
-                      )}
+                const submitBg = card.buttonColor || (isNeu ? neuStyles.bg : '#1A7FBE');
+                const submitText = card.buttonColor ? actionButtonTextColor : (isNeu ? neuStyles.textColor : actionButtonTextColor);
+
+                return (
+                  <div className="px-4 py-3 border-t border-slate-100/50">
+                    <div className="text-[11px] font-bold uppercase tracking-wider mb-1 flex items-center gap-1.5" style={{ color: contentContrast.titleColor }}>
+                      <Send size={12} className="text-sky-500" />
+                      <span>Enviar uma mensagem</span>
                     </div>
+                    <p className="text-[10px] mb-2.5" style={{ color: contentContrast.subtitleColor }}>
+                      Deixe um recado diretamente para {card.name || 'o titular'}.
+                    </p>
 
-                    {card.inquiryShowMessage !== false && (
-                      <div>
-                        <label className="block text-[10px] font-semibold mb-0.5" style={{ color: contentContrast.labelColor }}>
-                          Mensagem *
-                        </label>
-                        <div className="w-full px-2.5 py-1.5 text-[10px] rounded-lg border border-slate-200 bg-slate-50 text-slate-400">
-                          Olá, gostaria de saber mais...
+                    <div className="space-y-2">
+                      {card.inquiryShowName !== false && (
+                        <div>
+                          <label className="block text-[10px] font-semibold mb-0.5" style={{ color: contentContrast.labelColor }}>
+                            Seu Nome (opcional)
+                          </label>
+                          <div
+                            className="w-full px-2.5 py-1.5 text-[10px] rounded-lg border border-slate-200 bg-slate-50 text-slate-400 transition-all"
+                            style={{ backgroundColor: fieldBg, boxShadow: fieldShadow, border: fieldBorder }}
+                          >
+                            Ex: Maria Santos
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
 
-                    {/* Consentimento Obrigatório com Alto Contraste */}
-                    {card.inquiryShowConsent !== false && (
-                      <div
-                        className="flex items-start gap-1.5 p-2 rounded-lg border"
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {card.inquiryShowEmail !== false && (
+                          <div>
+                            <label className="block text-[10px] font-semibold mb-0.5" style={{ color: contentContrast.labelColor }}>
+                              E-mail *
+                            </label>
+                            <div
+                              className="w-full px-2 py-1.5 text-[10px] rounded-lg border border-slate-200 bg-slate-50 text-slate-400 truncate transition-all"
+                              style={{ backgroundColor: fieldBg, boxShadow: fieldShadow, border: fieldBorder }}
+                            >
+                              seu@email.com
+                            </div>
+                          </div>
+                        )}
+                        {card.inquiryShowPhone !== false && (
+                          <div>
+                            <label className="block text-[10px] font-semibold mb-0.5" style={{ color: contentContrast.labelColor }}>
+                              WhatsApp *
+                            </label>
+                            <div
+                              className="w-full px-2 py-1.5 text-[10px] rounded-lg border border-slate-200 bg-slate-50 text-slate-400 truncate transition-all"
+                              style={{ backgroundColor: fieldBg, boxShadow: fieldShadow, border: fieldBorder }}
+                            >
+                              (11) 99999-9999
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {card.inquiryShowMessage !== false && (
+                        <div>
+                          <label className="block text-[10px] font-semibold mb-0.5" style={{ color: contentContrast.labelColor }}>
+                            Mensagem *
+                          </label>
+                          <div
+                            className="w-full px-2.5 py-1.5 text-[10px] rounded-lg border border-slate-200 bg-slate-50 text-slate-400 transition-all"
+                            style={{ backgroundColor: fieldBg, boxShadow: fieldShadow, border: fieldBorder }}
+                          >
+                            Olá, gostaria de saber mais...
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Consentimento Obrigatório com Alto Contraste */}
+                      {card.inquiryShowConsent !== false && (
+                        <div
+                          className="flex items-start gap-1.5 p-2 rounded-lg border transition-all"
+                          style={{
+                            backgroundColor: isNeu ? (isNeuDark ? '#14161D' : '#E0E5EC') : (contentContrast.isDarkBg ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.03)'),
+                            borderColor: isNeu ? undefined : (contentContrast.isDarkBg ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.08)'),
+                            boxShadow: isNeu ? neuStyles.inset : undefined,
+                            border: isNeu ? neuStyles.border : undefined,
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={true}
+                            readOnly
+                            className="mt-0.5 rounded border-slate-300 text-sky-600 shrink-0 w-3.5 h-3.5"
+                          />
+                          <label
+                            className="text-[10px] font-medium leading-snug cursor-default select-none"
+                            style={{ color: contentContrast.consentColor }}
+                          >
+                            Concordo em compartilhar meus dados de contato com {card.name || 'o titular'} para fins de retorno desta mensagem.
+                          </label>
+                        </div>
+                      )}
+
+                      <button
+                        type="button"
+                        className="w-full py-2 px-3 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all"
                         style={{
-                          backgroundColor: contentContrast.isDarkBg ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.03)',
-                          borderColor: contentContrast.isDarkBg ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.08)',
+                          backgroundColor: submitBg,
+                          color: submitText,
+                          boxShadow: isNeu ? neuStyles.raised : '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+                          border: isNeu ? neuStyles.border : undefined,
                         }}
                       >
-                        <input
-                          type="checkbox"
-                          checked={true}
-                          readOnly
-                          className="mt-0.5 rounded border-slate-300 text-sky-600 shrink-0 w-3.5 h-3.5"
-                        />
-                        <label
-                          className="text-[10px] font-medium leading-snug cursor-default select-none"
-                          style={{ color: contentContrast.consentColor }}
-                        >
-                          Concordo em compartilhar meus dados de contato com {card.name || 'o titular'} para fins de retorno desta mensagem.
-                        </label>
-                      </div>
-                    )}
-
-                    <button
-                      type="button"
-                      className="w-full py-2 px-3 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1.5 shadow-xs"
-                      style={{
-                        backgroundColor: card.buttonColor || '#1A7FBE',
-                        color: actionButtonTextColor,
-                      }}
-                    >
-                      <Send size={11} />
-                      <span>Enviar mensagem</span>
-                    </button>
+                        <Send size={11} />
+                        <span>Enviar mensagem</span>
+                      </button>
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* CTA - Somente se configurado com label e link */}
               {hasCta && (

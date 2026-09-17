@@ -21,6 +21,7 @@ interface AuthContextType {
   plan: UserPlan;
   isMaster: boolean;
   isAdminOrMaster: boolean;
+  isDegustador: boolean;
   loading: boolean;
   isConfigured: boolean;
   signIn: (email: string, pass: string) => Promise<any>;
@@ -38,6 +39,7 @@ const AuthContext = createContext<AuthContextType>({
   plan: 'degustacao',
   isMaster: false,
   isAdminOrMaster: false,
+  isDegustador: false,
   loading: true,
   isConfigured: false,
   signIn: async () => {},
@@ -69,19 +71,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (masterAccount) {
           p.role = 'master';
           p.plan = 'corporativo';
+          p.status = 'ativo';
         }
         setProfile(p);
-      } else {
-        // Perfil preliminar enquanto carrega ou se não criado
-        setProfile({
-          id: currentUser.id,
-          email,
-          fullName: currentUser.user_metadata?.full_name || '',
-          role: masterAccount ? 'master' : ((currentUser.user_metadata?.role as UserRole) || 'cliente'),
-          plan: masterAccount ? 'corporativo' : ((currentUser.user_metadata?.plan as UserPlan) || 'degustacao'),
-          status: 'ativo',
-        });
+        return;
       }
+
+      // Se o Supabase não retornou perfil, consulta o backend local
+      const localRes = await fetch('/api/admin/users').catch(() => null);
+      if (localRes && localRes.ok) {
+        const list = await localRes.json();
+        const found = list.find(
+          (u: any) => u.id === currentUser.id || u.email?.toLowerCase() === email.toLowerCase()
+        );
+        if (found) {
+          setProfile({
+            id: currentUser.id,
+            email,
+            fullName: found.fullName || currentUser.user_metadata?.full_name || '',
+            role: masterAccount ? 'master' : (found.role || 'cliente'),
+            plan: masterAccount ? 'corporativo' : (found.plan || 'degustacao'),
+            status: masterAccount ? 'ativo' : (found.status || 'ativo'),
+            degustacaoDays: found.degustacaoDays,
+            degustacaoExpiresAt: found.degustacaoExpiresAt,
+          });
+          return;
+        }
+      }
+
+      // Perfil preliminar enquanto carrega ou se não criado
+      setProfile({
+        id: currentUser.id,
+        email,
+        fullName: currentUser.user_metadata?.full_name || '',
+        role: masterAccount ? 'master' : ((currentUser.user_metadata?.role as UserRole) || 'cliente'),
+        plan: masterAccount ? 'corporativo' : ((currentUser.user_metadata?.plan as UserPlan) || 'degustacao'),
+        status: masterAccount ? 'ativo' : 'ativo',
+      });
     } catch {
       if (masterAccount) {
         setProfile({
@@ -170,7 +196,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signUp = async (email: string, pass: string, fullName?: string) => {
-    const data = await authSignUp(email, pass, fullName);
+    const cleanEmail = email.trim().toLowerCase();
+
+    // 1. Verifica políticas globais do sistema antes do cadastro
+    const settingsRes = await fetch('/api/system-settings').catch(() => null);
+    if (settingsRes && settingsRes.ok) {
+      const settings = await settingsRes.json();
+      if (!isMasterEmail(cleanEmail) && settings.allowPublicRegistration === false) {
+        throw new Error(
+          'Novos auto-cadastros estão temporariamente desativados pelo Administrador Master. Entre em contato para liberação.'
+        );
+      }
+    }
+
+    // 2. Realiza o cadastro no Auth
+    const data = await authSignUp(cleanEmail, pass, fullName);
+
+    // 3. Notifica o backend para persistir políticas (aprovação, role, plano, prazo degustação)
+    if (data?.user) {
+      try {
+        const obRes = await fetch('/api/auth/onboarding-profile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: data.user.id,
+            email: data.user.email || cleanEmail,
+            fullName: fullName || '',
+          }),
+        });
+        if (obRes.ok) {
+          const obJson = await obRes.json();
+          if (obJson.profile) {
+            setProfile(obJson.profile);
+          }
+        }
+      } catch (err) {
+        console.warn('Falha no hook de onboarding:', err);
+      }
+    }
+
     if (data.session) {
       setUser(data.user);
       setSession(data.session);
@@ -197,6 +261,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const role: UserRole = isMaster ? 'master' : (profile?.role || 'cliente');
   const plan: UserPlan = isMaster ? 'corporativo' : (profile?.plan || 'degustacao');
   const isAdminOrMaster = isMaster || role === 'admin';
+  const isDegustador = !isMaster && (role === 'degustador' || (profile?.role === 'degustador'));
 
   return (
     <AuthContext.Provider
@@ -208,6 +273,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         plan,
         isMaster,
         isAdminOrMaster,
+        isDegustador,
         loading,
         isConfigured,
         signIn,

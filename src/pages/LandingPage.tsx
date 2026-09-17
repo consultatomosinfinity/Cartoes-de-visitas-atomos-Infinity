@@ -25,10 +25,13 @@ import {
   X,
   CreditCard,
   Lock,
+  Crown,
+  Edit,
 } from 'lucide-react';
 import { ThemeToggle } from '../components/ThemeToggle.tsx';
 import { DigitalCardLivePreview } from '../components/DigitalCardLivePreview.tsx';
 import { DigitalCard } from '../types.ts';
+import { useAuth } from '../contexts/AuthContext.tsx';
 
 // Cartão padrão para exibição interativa na demonstração da landing page
 const DEMO_CARD_FALLBACK: Partial<DigitalCard> = {
@@ -75,24 +78,69 @@ const DEMO_CARD_FALLBACK: Partial<DigitalCard> = {
 };
 
 export const LandingPage: React.FC = () => {
+  const { isMaster } = useAuth();
   const [demoCard, setDemoCard] = useState<Partial<DigitalCard>>(DEMO_CARD_FALLBACK);
   const [billingCycle, setBillingCycle] = useState<'quarterly' | 'semiannual' | 'annual'>('annual');
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeInteractiveTab, setActiveInteractiveTab] = useState<'card' | 'qr' | 'ai'>('card');
+  const [degustacaoDays, setDegustacaoDays] = useState<number>(30);
 
-  // Carrega o primeiro cartão real cadastrado caso exista
-  useEffect(() => {
-    fetch('/api/cards')
-      .then((res) => (res.ok ? res.json() : []))
-      .then((cards: DigitalCard[]) => {
-        if (cards && cards.length > 0) {
-          setDemoCard(cards[0]);
+  // Carrega o modelo padrão configurado pelo Master e configurações do sistema
+  const fetchLandingCard = () => {
+    fetch('/api/settings/landing-card')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((card: Partial<DigitalCard> | null) => {
+        if (card && card.name) {
+          setDemoCard(card);
+        } else {
+          // Fallback para o primeiro cartão se existir
+          fetch('/api/cards')
+            .then((r) => (r.ok ? r.json() : []))
+            .then((cards: DigitalCard[]) => {
+              if (cards && cards.length > 0) {
+                setDemoCard(cards[0]);
+              }
+            })
+            .catch(() => {});
         }
       })
       .catch(() => {
         // Fallback já definido
       });
+  };
+
+  useEffect(() => {
+    fetchLandingCard();
+    fetch('/api/system-settings')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((settings) => {
+        if (settings && typeof settings.degustacaoDays === 'number') {
+          setDegustacaoDays(settings.degustacaoDays);
+        }
+      })
+      .catch(() => {});
+
+    // Sincronização em tempo real caso o Master altere o modelo em outra aba
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        const ch = new BroadcastChannel('digital_cards_sync');
+        ch.onmessage = () => {
+          fetchLandingCard();
+          fetch('/api/system-settings')
+            .then((r) => (r.ok ? r.json() : null))
+            .then((settings) => {
+              if (settings && typeof settings.degustacaoDays === 'number') {
+                setDegustacaoDays(settings.degustacaoDays);
+              }
+            })
+            .catch(() => {});
+        };
+        return () => {
+          ch.close();
+        };
+      }
+    } catch (e) {}
   }, []);
 
   const toggleFaq = (index: number) => {
@@ -101,6 +149,25 @@ export const LandingPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 antialiased selection:bg-sky-500 selection:text-white transition-colors duration-200">
+      {/* Barra de Ação Rápida Exclusiva do Usuário Master */}
+      {isMaster && (
+        <div className="bg-gradient-to-r from-purple-900 via-indigo-900 to-sky-900 text-white px-4 py-2 text-xs font-semibold flex items-center justify-between shadow-sm sticky top-0 z-50">
+          <div className="flex items-center gap-2 max-w-4xl truncate">
+            <Crown size={14} className="text-amber-300 shrink-0" />
+            <span className="truncate">
+              <strong>Modo Master:</strong> Você está visualizando o modelo da demonstração (<em>{demoCard.name || 'Padrão'}</em>).
+            </span>
+          </div>
+          <a
+            href="/app?modo=landing-template"
+            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-[11px] shadow-xs transition-all shrink-0 ml-2"
+          >
+            <Edit size={12} />
+            <span>Editar Modelo da Landing Page</span>
+          </a>
+        </div>
+      )}
+
       {/* ---------------------------------------------------- */}
       {/* 1. CABEÇALHO / NAVBAR */}
       {/* ---------------------------------------------------- */}
@@ -137,6 +204,9 @@ export const LandingPage: React.FC = () => {
             </a>
             <a href="#faq" className="hover:text-sky-600 dark:hover:text-sky-400 transition-colors">
               Dúvidas
+            </a>
+            <a href="/ajuda" className="text-sky-600 dark:text-sky-400 font-bold hover:underline transition-colors flex items-center gap-1">
+              <span>Ajuda & Docs</span>
             </a>
           </nav>
 
@@ -209,6 +279,13 @@ export const LandingPage: React.FC = () => {
               className="block py-2 text-sm font-bold text-slate-700 dark:text-slate-200"
             >
               Dúvidas
+            </a>
+            <a
+              href="/ajuda"
+              onClick={() => setMobileMenuOpen(false)}
+              className="block py-2 text-sm font-bold text-sky-600 dark:text-sky-400"
+            >
+              Central de Ajuda & Docs
             </a>
             <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
               <a
@@ -601,7 +678,7 @@ export const LandingPage: React.FC = () => {
       {/* ---------------------------------------------------- */}
       <section id="planos" className="py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          {/* 1. Banner de Degustação (Trial 30 dias) */}
+          {/* 1. Banner de Degustação (Trial dinâmico) */}
           <div className="mb-14 p-6 sm:p-8 rounded-3xl bg-gradient-to-r from-sky-600 via-sky-500 to-indigo-600 text-white shadow-xl shadow-sky-600/20 relative overflow-hidden">
             {/* Efeitos decorativos de fundo */}
             <div className="absolute -right-12 -bottom-12 w-64 h-64 rounded-full bg-white/10 blur-2xl pointer-events-none" />
@@ -611,13 +688,13 @@ export const LandingPage: React.FC = () => {
               <div className="space-y-2 max-w-2xl">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-white text-xs font-black uppercase tracking-wider">
                   <Sparkles size={14} className="text-amber-300" />
-                  <span>Degustação Gratuita de 30 Dias</span>
+                  <span>Degustação Gratuita de {degustacaoDays} Dias</span>
                 </div>
                 <h3 className="text-2xl sm:text-3xl font-black tracking-tight font-heading">
-                  Experimente 1 Mês Grátis!
+                  Experimente {degustacaoDays === 30 ? '1 Mês' : `${degustacaoDays} Dias`} Grátis!
                 </h3>
                 <p className="text-sm sm:text-base text-sky-50 font-normal leading-relaxed">
-                  Crie e use seu <strong>Cartão Digital por 30 dias sem compromisso</strong>. Sem cobrança antecipada e com acesso completo a todos os recursos desde o primeiro minuto.
+                  Crie e use seu <strong>Cartão Digital por {degustacaoDays} dias sem compromisso</strong>. Sem cobrança antecipada e com acesso completo a todos os recursos desde o primeiro minuto.
                 </p>
               </div>
 
@@ -626,7 +703,7 @@ export const LandingPage: React.FC = () => {
                   href="/app"
                   className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-7 py-3.5 text-sm sm:text-base font-black text-sky-900 bg-white hover:bg-slate-100 active:scale-98 rounded-2xl shadow-lg transition-all cursor-pointer"
                 >
-                  <span>Garantir Meus 30 Dias Grátis</span>
+                  <span>Garantir Meus {degustacaoDays} Dias Grátis</span>
                   <ArrowRight size={18} className="text-sky-600" />
                 </a>
               </div>
@@ -712,7 +789,7 @@ export const LandingPage: React.FC = () => {
                     <p className="text-xs text-slate-500 dark:text-slate-400">Para autônomos e consultores</p>
                   </div>
                   <span className="px-2 py-1 rounded-md text-[10px] font-bold bg-sky-50 dark:bg-sky-950/50 text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-800">
-                    30 Dias Grátis
+                    {degustacaoDays} Dias Grátis
                   </span>
                 </div>
 
@@ -764,7 +841,7 @@ export const LandingPage: React.FC = () => {
                   className="w-full inline-flex items-center justify-center gap-2 py-3 px-4 text-xs font-bold text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/50 hover:bg-sky-100 dark:hover:bg-sky-900/60 rounded-xl border border-sky-200 dark:border-sky-800 transition-colors"
                 >
                   <Sparkles size={14} />
-                  <span>Começar Teste de 1 Mês Grátis</span>
+                  <span>Começar Teste de {degustacaoDays === 30 ? '1 Mês' : `${degustacaoDays} Dias`} Grátis</span>
                 </a>
               </div>
             </div>
@@ -783,7 +860,7 @@ export const LandingPage: React.FC = () => {
                     <p className="text-xs text-slate-500 dark:text-slate-400">Com Atendente Virtual e Formulário</p>
                   </div>
                   <span className="px-2 py-1 rounded-md text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                    30 Dias Grátis
+                    {degustacaoDays} Dias Grátis
                   </span>
                 </div>
 
@@ -835,7 +912,7 @@ export const LandingPage: React.FC = () => {
                   className="w-full inline-flex items-center justify-center gap-2 py-3.5 px-4 text-xs font-bold text-white bg-sky-600 hover:bg-sky-700 rounded-xl shadow-md shadow-sky-600/25 transition-all"
                 >
                   <Sparkles size={14} className="text-amber-300" />
-                  <span>Começar Teste de 1 Mês Grátis</span>
+                  <span>Começar Teste de {degustacaoDays === 30 ? '1 Mês' : `${degustacaoDays} Dias`} Grátis</span>
                   <ArrowRight size={14} />
                 </a>
               </div>
@@ -906,11 +983,11 @@ export const LandingPage: React.FC = () => {
               <h4 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white flex items-center justify-center sm:justify-start gap-2">
                 <span>Garantia de Degustação Sem Compromisso</span>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300">
-                  100% Grátis no 1º Mês
+                  100% Grátis por {degustacaoDays} Dias
                 </span>
               </h4>
               <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-                Você testa a solução completa por 1 mês sem pagar nada. Ao final do período de degustação, escolha o ciclo (Trimestral, Semestral ou Anual) que preferir para manter seu cartão ativo.
+                Você testa a solução completa por {degustacaoDays === 30 ? '1 mês' : `${degustacaoDays} dias`} sem pagar nada. Ao final do período de degustação, escolha o ciclo (Trimestral, Semestral ou Anual) que preferir para manter seu cartão ativo.
               </p>
             </div>
             <a
@@ -1066,6 +1143,7 @@ export const LandingPage: React.FC = () => {
                 <li><a href="#demonstracao" className="hover:text-white transition-colors">Demonstração</a></li>
                 <li><a href="#planos" className="hover:text-white transition-colors">Planos & Preços</a></li>
                 <li><a href="#faq" className="hover:text-white transition-colors">Perguntas Frequentes</a></li>
+                <li><a href="/ajuda" className="text-sky-400 font-bold hover:underline transition-colors flex items-center gap-1">Central de Ajuda & Docs</a></li>
               </ul>
             </div>
 

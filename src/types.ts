@@ -17,7 +17,7 @@ export type OutboundDestination =
   | 'ai_agent';
 export type InquiryStatus = 'novo' | 'lido' | 'arquivado';
 
-export type UserRole = 'master' | 'admin' | 'colaborador' | 'cliente';
+export type UserRole = 'master' | 'admin' | 'colaborador' | 'cliente' | 'degustador';
 export type UserPlan = 'degustacao' | 'profissional' | 'negocios_ia' | 'corporativo';
 export type UserAccountStatus = 'ativo' | 'pausado' | 'bloqueado';
 
@@ -29,7 +29,20 @@ export interface UserProfile {
   plan: UserPlan;
   status: UserAccountStatus;
   cardsCount?: number;
+  degustacaoDays?: number;
+  degustacaoExpiresAt?: string;
   createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface SystemSettings {
+  requireMasterApproval: boolean; // Se true, novos cadastros entram como 'pausado' aguardando aprovação
+  defaultRole: UserRole; // 'cliente' ou 'degustador'
+  defaultPlan: UserPlan; // 'degustacao', 'profissional', etc.
+  degustacaoDays: number; // Ex: 30 dias (padrão), 7, 14, 15, 60, etc.
+  allowPublicRegistration: boolean; // Se true, cadastro público aberto; se false, apenas Master cadastra
+  masterWhatsApp?: string; // WhatsApp de contato do Master
+  customWelcomeMessage?: string;
   updatedAt?: string;
 }
 
@@ -157,6 +170,8 @@ export interface DigitalCard {
   // Assets visuais
   imageKey?: string;
   imageUrl?: string;
+  imageFocusX?: number;
+  imageFocusY?: number;
   companyLogoKey?: string;
   companyLogoUrl?: string;
   frameScale: number;

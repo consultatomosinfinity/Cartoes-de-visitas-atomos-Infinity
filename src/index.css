@@ -182,3 +182,133 @@ body.card-hide-site-agent [class*="jf-agent"] {
   animation: ai-glow-intenso 1.9s ease-in-out infinite;
 }
 
+/* ==========================================================================
+   NEUMORPHISM (SOFT UI) DESIGN SYSTEM & THEME
+   Suporte a relevo côncavo, convexo, extrudado e embutido em Light & Dark
+   ========================================================================== */
+
+/* 1. MODO NEUMORPHISM CLARO NA PLATAFORMA */
+html.theme-neu-light body {
+  background-color: #E0E5EC !important;
+  color: #2D3748 !important;
+}
+
+html.theme-neu-light header.bg-white,
+html.theme-neu-light .bg-white:not(#phone-mockup-frame *):not(#public-card-container *):not(.keep-white),
+html.theme-neu-light [class*="bg-white"]:not(#phone-mockup-frame *):not(#public-card-container *):not(.keep-white) {
+  background-color: #E0E5EC !important;
+  border-color: rgba(255, 255, 255, 0.7) !important;
+  box-shadow: 6px 6px 14px #b8b9be, -6px -6px 14px #ffffff !important;
+}
+
+html.theme-neu-light .bg-slate-50:not(#phone-mockup-frame *):not(#public-card-container *),
+html.theme-neu-light .bg-slate-100:not(#phone-mockup-frame *):not(#public-card-container *) {
+  background-color: #E0E5EC !important;
+  border-color: rgba(255, 255, 255, 0.6) !important;
+  box-shadow: inset 3px 3px 6px #b8b9be, inset -3px -3px 6px #ffffff !important;
+}
+
+html.theme-neu-light input:not([type="color"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]):not(#phone-mockup-frame *):not(#public-card-container *),
+html.theme-neu-light textarea:not(#phone-mockup-frame *):not(#public-card-container *),
+html.theme-neu-light select:not(#phone-mockup-frame *):not(#public-card-container *) {
+  background-color: #E0E5EC !important;
+  color: #1E293B !important;
+  border: 1px solid rgba(255, 255, 255, 0.5) !important;
+  box-shadow: inset 3px 3px 6px #b8b9be, inset -3px -3px 6px #ffffff !important;
+}
+
+/* 2. MODO NEUMORPHISM ESCURO NA PLATAFORMA */
+html.theme-neu-dark body {
+  background-color: #14171E !important;
+  color: #F1F5F9 !important;
+}
+
+html.theme-neu-dark header.bg-white,
+html.theme-neu-dark .bg-white:not(#phone-mockup-frame *):not(#public-card-container *):not(.keep-white),
+html.theme-neu-dark [class*="bg-white"]:not(#phone-mockup-frame *):not(#public-card-container *):not(.keep-white) {
+  background-color: #181B22 !important;
+  border-color: rgba(255, 255, 255, 0.05) !important;
+  box-shadow: 6px 6px 16px rgba(0, 0, 0, 0.7), -6px -6px 16px rgba(255, 255, 255, 0.04) !important;
+}
+
+html.theme-neu-dark .bg-slate-50:not(#phone-mockup-frame *):not(#public-card-container *),
+html.theme-neu-dark .bg-slate-100:not(#phone-mockup-frame *):not(#public-card-container *),
+html.theme-neu-dark .bg-slate-800:not(#phone-mockup-frame *):not(#public-card-container *),
+html.theme-neu-dark .bg-slate-900:not(#phone-mockup-frame *):not(#public-card-container *) {
+  background-color: #181B22 !important;
+  border-color: rgba(255, 255, 255, 0.04) !important;
+  box-shadow: inset 3px 3px 7px rgba(0, 0, 0, 0.75), inset -3px -3px 7px rgba(255, 255, 255, 0.03) !important;
+}
+
+html.theme-neu-dark input:not([type="color"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]):not(#phone-mockup-frame *):not(#public-card-container *),
+html.theme-neu-dark textarea:not(#phone-mockup-frame *):not(#public-card-container *),
+html.theme-neu-dark select:not(#phone-mockup-frame *):not(#public-card-container *) {
+  background-color: #14161D !important;
+  color: #F8FAFC !important;
+  border: 1px solid rgba(255, 255, 255, 0.06) !important;
+  box-shadow: inset 3px 3px 7px rgba(0, 0, 0, 0.8), inset -3px -3px 7px rgba(255, 255, 255, 0.03) !important;
+}
+
+/* 3. UTILITÁRIOS PARA CARTÕES NEUMÓRFICOS (PÚBLICOS & PREVIEW) */
+.neu-card-light {
+  background-color: #E0E5EC !important;
+  box-shadow: 7px 7px 15px #b8b9be, -7px -7px 15px #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.6) !important;
+}
+
+.neu-card-dark {
+  background-color: #181B22 !important;
+  box-shadow: 7px 7px 18px rgba(0, 0, 0, 0.75), -7px -7px 18px rgba(255, 255, 255, 0.04) !important;
+  border: 1px solid rgba(255, 255, 255, 0.04) !important;
+}
+
+.neu-button-light {
+  background-color: #E0E5EC;
+  color: #2D3748;
+  box-shadow: 5px 5px 10px #b8b9be, -5px -5px 10px #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  transition: all 0.2s ease;
+}
+
+.neu-button-light:hover {
+  box-shadow: 7px 7px 14px #b8b9be, -7px -7px 14px #ffffff;
+  transform: translateY(-1px);
+}
+
+.neu-button-light:active {
+  box-shadow: inset 3px 3px 6px #b8b9be, inset -3px -3px 6px #ffffff;
+  transform: translateY(0);
+}
+
+.neu-button-dark {
+  background-color: #181B22;
+  color: #F1F5F9;
+  box-shadow: 5px 5px 12px rgba(0, 0, 0, 0.7), -5px -5px 12px rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  transition: all 0.2s ease;
+}
+
+.neu-button-dark:hover {
+  box-shadow: 7px 7px 16px rgba(0, 0, 0, 0.8), -7px -7px 16px rgba(255, 255, 255, 0.06);
+  transform: translateY(-1px);
+}
+
+.neu-button-dark:active {
+  box-shadow: inset 3px 3px 7px rgba(0, 0, 0, 0.8), inset -3px -3px 7px rgba(255, 255, 255, 0.03);
+  transform: translateY(0);
+}
+
+.neu-inset-light-field {
+  background-color: #E0E5EC !important;
+  color: #1E293B !important;
+  box-shadow: inset 3px 3px 6px #b8b9be, inset -3px -3px 6px #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.4) !important;
+}
+
+.neu-inset-dark-field {
+  background-color: #14161D !important;
+  color: #F8FAFC !important;
+  box-shadow: inset 3px 3px 7px rgba(0, 0, 0, 0.8), inset -3px -3px 7px rgba(255, 255, 255, 0.03) !important;
+  border: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+

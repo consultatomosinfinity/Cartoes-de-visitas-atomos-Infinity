@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { DigitalCard } from '../types.ts';
 import { parseAiAgentInput, getAiAgentButtonGlowClass, getAiAgentButtonPaddingY } from '../../shared/digital-card-ai-agent.ts';
-import { getContrastTextColor, isConfiguredLink, hexToRgba, getCardContentContrastColors } from '../../shared/digital-card-appearance.ts';
+import { getContrastTextColor, isConfiguredLink, hexToRgba, getCardContentContrastColors, isNeumorphismTheme, getNeumorphicCardStyles, isGlassmorphismTheme, getGlassmorphicCardStyles } from '../../shared/digital-card-appearance.ts';
 import { downloadVCard } from '../../shared/digital-card-vcf.ts';
 import { DigitalCardDualPorthole } from '../components/DigitalCardDualPorthole.tsx';
 import { DigitalCardQrCode } from '../components/DigitalCardQrCode.tsx';
@@ -389,6 +389,10 @@ export const DigitalCardPublic: React.FC<DigitalCardPublicProps> = ({ slug }) =>
   const headerTextColor = getContrastTextColor(card.backgroundColor);
   const actionButtonTextColor = getContrastTextColor(card.buttonColor);
 
+  const isGlass = isGlassmorphismTheme(card.appearanceTheme);
+  const isGlassDark = card.appearanceTheme === 'glass_dark';
+  const glassStyles = getGlassmorphicCardStyles(isGlassDark);
+
   // Cores de contraste garantido para a área de conteúdo (formulário, consentimento, rótulos e rodapé)
   const contentContrast = getCardContentContrastColors({
     contentColor: card.contentColor,
@@ -418,10 +422,20 @@ export const DigitalCardPublic: React.FC<DigitalCardPublicProps> = ({ slug }) =>
     <main
       id="public-card-container"
       className="min-h-screen py-8 px-4 flex flex-col items-center justify-start card-transition"
-      style={{ backgroundColor: card.bodyColor || '#EAF1F7', fontFamily: getFontFamily(card.fontFamily || 'sans') }}
+      style={{
+        backgroundColor: isGlass ? (isGlassDark ? '#090D16' : '#0F172A') : (card.bodyColor || '#EAF1F7'),
+        fontFamily: getFontFamily(card.fontFamily || 'sans')
+      }}
     >
       {/* Container Principal do Cartão Digital */}
-      <div className="relative w-full max-w-[400px] sm:max-w-[390px] rounded-[2.5rem] shadow-2xl overflow-hidden card-transition flex flex-col border border-black/5 mx-auto">
+      <div
+        className="relative w-full max-w-[400px] sm:max-w-[390px] rounded-[2.5rem] shadow-2xl overflow-hidden card-transition flex flex-col mx-auto transition-all"
+        style={{
+          backdropFilter: isGlass ? glassStyles.backdropBlur : undefined,
+          boxShadow: isGlass ? glassStyles.shadow : '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+          border: isGlass ? glassStyles.border : '1px solid rgba(0,0,0,0.05)',
+        }}
+      >
         {/* CAMADA DE IMAGEM DE FUNDO DO CARTÃO (se configurada) */}
         {card.contentBackgroundImageUrl && (
           <div
@@ -444,21 +458,29 @@ export const DigitalCardPublic: React.FC<DigitalCardPublicProps> = ({ slug }) =>
           </div>
         )}
 
-        {/* CAMADA DE CONTEÚDO DO CARTÃO (com cor e transparência alpha) */}
+        {/* CAMADA DE CONTEÚDO DO CARTÃO (com cor, transparência alpha ou vidro) */}
         <div
-          className="relative z-10 w-full flex flex-col flex-1 min-h-full"
+          className="relative z-10 w-full flex flex-col flex-1 min-h-full transition-all"
           style={{
-            backgroundColor: hexToRgba(card.contentColor || '#FFFFFF', (card.contentOpacity ?? 100) / 100),
+            backgroundColor: isGlass ? glassStyles.cardBg : hexToRgba(card.contentColor || '#FFFFFF', (card.contentOpacity ?? 100) / 100),
           }}
         >
           {/* 1. Header do Cartão com Fundo Colorido e Dual-Porthole */}
-          <div
-            className="pt-8 pb-6 px-6 text-center relative overflow-hidden"
-            style={{
-              backgroundColor: hexToRgba(card.backgroundColor || '#12375B', (card.headerOpacity ?? 100) / 100),
-              color: headerTextColor,
-            }}
-          >
+          {(() => {
+            const headerBg = isGlass
+              ? (isGlassDark ? 'rgba(15, 23, 42, 0.45)' : 'rgba(255, 255, 255, 0.35)')
+              : hexToRgba(card.backgroundColor || '#12375B', (card.headerOpacity ?? 100) / 100);
+
+            return (
+              <div
+                className="pt-8 pb-6 px-6 text-center relative overflow-hidden transition-all"
+                style={{
+                  backgroundColor: headerBg,
+                  backdropFilter: isGlass ? 'blur(12px)' : undefined,
+                  borderBottom: isGlass ? glassStyles.borderSubtle : undefined,
+                  color: headerTextColor,
+                }}
+              >
           {/* Dual Porthole: Foto circular + Logo da empresa */}
           <DigitalCardDualPorthole
             imageUrl={card.imageUrl}
@@ -466,6 +488,8 @@ export const DigitalCardPublic: React.FC<DigitalCardPublicProps> = ({ slug }) =>
             companyLogoUrl={card.companyLogoUrl}
             brandName={card.brandName}
             frameScale={card.frameScale || 97}
+            imageFocusX={card.imageFocusX ?? 50}
+            imageFocusY={card.imageFocusY ?? 50}
             companyLogoFocusX={card.companyLogoFocusX || 56}
             companyLogoFocusY={card.companyLogoFocusY || 67}
             borderColor={card.contentColor || '#FFFFFF'}
@@ -485,27 +509,33 @@ export const DigitalCardPublic: React.FC<DigitalCardPublicProps> = ({ slug }) =>
               {card.jobTitle}
             </p>
           )}
-        </div>
+              </div>
+            );
+          })()}
 
         {/* 4. GRUPO DE BOTÕES DE AÇÃO (Ordem Obrigatória) */}
         {(() => {
+          const isNeu = isNeumorphismTheme(card.appearanceTheme);
+          const isNeuDark = card.appearanceTheme === 'neumorphism_dark';
+          const neuStyles = getNeumorphicCardStyles(isNeuDark);
+
           const globalRadius = card.buttonsBorderRadius ?? 16;
           const vcardRadius = card.vcardButtonBorderRadius ?? globalRadius;
           const whatsappRadius = card.whatsappButtonBorderRadius ?? globalRadius;
           const pwaRadius = card.pwaButtonBorderRadius ?? globalRadius;
           const aiAgentRadius = card.aiAgentButtonBorderRadius ?? globalRadius;
 
-          const vcardBg = card.vcardButtonColor || card.buttonColor || '#1A7FBE';
-          const vcardText = card.vcardButtonTextColor || getContrastTextColor(vcardBg);
+          const vcardBg = card.vcardButtonColor || card.buttonColor || (isNeu ? neuStyles.bg : '#1A7FBE');
+          const vcardText = card.vcardButtonTextColor || (isNeu && !card.vcardButtonColor && !card.buttonColor ? neuStyles.textColor : getContrastTextColor(vcardBg));
 
-          const whatsappBg = card.whatsappButtonColor || '#059669';
-          const whatsappText = card.whatsappButtonTextColor || '#FFFFFF';
+          const whatsappBg = card.whatsappButtonColor || (isNeu ? neuStyles.bg : '#059669');
+          const whatsappText = card.whatsappButtonTextColor || (isNeu && !card.whatsappButtonColor ? (isNeuDark ? '#34D399' : '#059669') : '#FFFFFF');
 
-          const pwaBg = card.pwaButtonColor || '#0F172A';
-          const pwaText = card.pwaButtonTextColor || '#FFFFFF';
+          const pwaBg = card.pwaButtonColor || (isNeu ? neuStyles.bg : '#0F172A');
+          const pwaText = card.pwaButtonTextColor || (isNeu && !card.pwaButtonColor ? neuStyles.textColor : '#FFFFFF');
 
-          const aiAgentBg = card.aiAgentButtonColor || '#7C3AED';
-          const aiAgentText = card.aiAgentButtonTextColor || '#FFFFFF';
+          const aiAgentBg = card.aiAgentButtonColor || (isNeu ? neuStyles.bg : '#7C3AED');
+          const aiAgentText = card.aiAgentButtonTextColor || (isNeu && !card.aiAgentButtonColor ? (isNeuDark ? '#C084FC' : '#7C3AED') : '#FFFFFF');
 
           return (
             <div className="px-5 pt-3 pb-4 flex flex-col gap-2.5">
@@ -513,11 +543,13 @@ export const DigitalCardPublic: React.FC<DigitalCardPublicProps> = ({ slug }) =>
               <button
                 type="button"
                 onClick={() => downloadVCard(card)}
-                className="w-full flex items-center justify-center gap-2.5 py-3 px-5 font-bold text-sm shadow-md hover:opacity-95 active:scale-[0.99] transition-all cursor-pointer"
+                className="w-full flex items-center justify-center gap-2.5 py-3 px-5 font-bold text-sm hover:opacity-95 active:scale-[0.99] transition-all cursor-pointer"
                 style={{
                   backgroundColor: vcardBg,
                   color: vcardText,
                   borderRadius: `${vcardRadius}px`,
+                  boxShadow: isNeu ? neuStyles.raised : '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                  border: isNeu ? neuStyles.border : undefined,
                 }}
               >
                 <Download size={18} />
@@ -529,11 +561,13 @@ export const DigitalCardPublic: React.FC<DigitalCardPublicProps> = ({ slug }) =>
                 href={whatsappShareUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="w-full flex items-center justify-center gap-2.5 py-3 px-5 font-bold text-sm shadow-md hover:opacity-95 active:scale-[0.99] transition-all cursor-pointer"
+                className="w-full flex items-center justify-center gap-2.5 py-3 px-5 font-bold text-sm hover:opacity-95 active:scale-[0.99] transition-all cursor-pointer"
                 style={{
                   backgroundColor: whatsappBg,
                   color: whatsappText,
                   borderRadius: `${whatsappRadius}px`,
+                  boxShadow: isNeu ? neuStyles.raised : '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                  border: isNeu ? neuStyles.border : undefined,
                 }}
               >
                 <Share2 size={18} />
@@ -544,11 +578,13 @@ export const DigitalCardPublic: React.FC<DigitalCardPublicProps> = ({ slug }) =>
               <DigitalCardPwaInstall
                 appName={card.mobileAppName || (card.brandName ? `${card.name} | ${card.brandName}` : card.name)}
                 iconUrl={card.mobileIconUrl || card.companyLogoUrl || card.imageUrl || '/icon-192.png'}
-                buttonClassName="w-full flex items-center justify-center gap-2.5 py-3 px-5 font-bold text-sm shadow-md hover:opacity-95 active:scale-[0.99] transition-all cursor-pointer"
+                buttonClassName="w-full flex items-center justify-center gap-2.5 py-3 px-5 font-bold text-sm hover:opacity-95 active:scale-[0.99] transition-all cursor-pointer"
                 style={{
                   backgroundColor: pwaBg,
                   color: pwaText,
                   borderRadius: `${pwaRadius}px`,
+                  boxShadow: isNeu ? neuStyles.raised : '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                  border: isNeu ? neuStyles.border : undefined,
                 }}
               />
 
@@ -569,9 +605,10 @@ export const DigitalCardPublic: React.FC<DigitalCardPublicProps> = ({ slug }) =>
                       borderRadius: `${aiAgentRadius}px`,
                       paddingTop: `${paddingY}px`,
                       paddingBottom: `${paddingY}px`,
-                      borderWidth: borderWidth > 0 ? `${borderWidth}px` : undefined,
-                      borderStyle: borderWidth > 0 ? 'solid' : undefined,
-                      borderColor: borderWidth > 0 ? borderColor : undefined,
+                      boxShadow: isNeu ? neuStyles.raised : '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                      borderWidth: borderWidth > 0 ? `${borderWidth}px` : (isNeu ? '1px' : undefined),
+                      borderStyle: (borderWidth > 0 || isNeu) ? 'solid' : undefined,
+                      borderColor: borderWidth > 0 ? borderColor : (isNeu ? (isNeuDark ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.7)') : undefined),
                     }}
                   >
                     <Bot size={paddingY >= 16 ? 21 : 19} className="shrink-0" />
@@ -588,7 +625,7 @@ export const DigitalCardPublic: React.FC<DigitalCardPublicProps> = ({ slug }) =>
 
         {/* 5. Resumo Profissional (se preenchido) */}
         {hasSummary && (
-          <div className="px-6 py-3 text-center border-t border-slate-100">
+          <div className="px-6 py-3 text-center border-t border-slate-100/50">
             <p className="text-[13px] leading-relaxed italic" style={{ color: summaryTextColor }}>
               "{card.summary}"
             </p>
@@ -596,147 +633,193 @@ export const DigitalCardPublic: React.FC<DigitalCardPublicProps> = ({ slug }) =>
         )}
 
         {/* 6. Canais de Contato - Somente se houver canais configurados */}
-        {hasContacts && (
-          <div className="px-5 py-4 flex flex-col gap-2 border-t border-slate-100">
-            <h2 className="text-xs font-bold uppercase tracking-wider mb-1 px-1" style={{ color: card.supportTextColor || '#94a3b8' }}>
-              Canais de Comunicação
-            </h2>
+        {hasContacts && (() => {
+          const isNeu = isNeumorphismTheme(card.appearanceTheme);
+          const isNeuDark = card.appearanceTheme === 'neumorphism_dark';
+          const neuStyles = getNeumorphicCardStyles(isNeuDark);
 
-            {hasWhatsapp && (
-              <a
-                href={`/cartao/${card.slug}/ir/whatsapp`}
-                className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors text-slate-800"
-              >
-                <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
-                  <MessageCircle size={18} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-[11px] text-slate-400 font-medium">WhatsApp Profissional</div>
-                  <div className="text-[13px] font-semibold truncate text-slate-700">
-                    {card.whatsappPhone}
-                  </div>
-                </div>
-              </a>
-            )}
+          const itemBg = isNeu ? neuStyles.bg : undefined;
+          const itemShadow = isNeu ? neuStyles.raisedSubtle : undefined;
+          const itemBorder = isNeu ? neuStyles.border : undefined;
+          const itemTextColor = isNeu ? neuStyles.textColor : undefined;
 
-            {hasPhone && (
-              <a
-                href={`tel:${card.phone!.replace(/\s+/g, '')}`}
-                className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors text-slate-800"
-              >
-                <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
-                  <Phone size={18} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-[11px] text-slate-400 font-medium">Telefone</div>
-                  <div className="text-[13px] font-semibold truncate text-slate-700">
-                    {card.phone}
-                  </div>
-                </div>
-              </a>
-            )}
+          return (
+            <div className="px-5 py-4 flex flex-col gap-2 border-t border-slate-100/50">
+              <h2 className="text-xs font-bold uppercase tracking-wider mb-1 px-1" style={{ color: card.supportTextColor || '#94a3b8' }}>
+                Canais de Comunicação
+              </h2>
 
-            {hasEmail && (
-              <a
-                href={`mailto:${card.email}`}
-                className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors text-slate-800"
-              >
-                <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
-                  <Mail size={18} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-[11px] text-slate-400 font-medium">E-mail</div>
-                  <div className="text-[13px] font-semibold truncate text-slate-700">
-                    {card.email}
-                  </div>
-                </div>
-              </a>
-            )}
-
-            {hasWebsite && (
-              <a
-                href={`/cartao/${card.slug}/ir/website`}
-                className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors text-slate-800"
-              >
-                <div className="w-8 h-8 rounded-lg bg-sky-100 text-sky-700 flex items-center justify-center shrink-0">
-                  <Globe size={18} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-[11px] text-slate-400 font-medium">Website Oficial</div>
-                  <div className="text-[13px] font-semibold truncate text-slate-700">
-                    {card.websiteUrl!.replace(/^https?:\/\//, '')}
-                  </div>
-                </div>
-                <ExternalLink size={14} className="text-slate-400" />
-              </a>
-            )}
-
-            {hasLocation && (
-              <a
-                href={`/cartao/${card.slug}/ir/maps`}
-                className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors text-slate-800"
-              >
-                <div className="w-8 h-8 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center shrink-0">
-                  <MapPin size={18} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-[11px] text-slate-400 font-medium">Localização</div>
-                  <div className="text-[13px] font-semibold truncate text-slate-700">
-                    {[card.address, card.addressNumber, card.city, card.state].filter(Boolean).join(', ')}
-                  </div>
-                </div>
-                <ExternalLink size={14} className="text-slate-400" />
-              </a>
-            )}
-          </div>
-        )}
-
-        {/* 7. Redes Sociais - Somente se houver links de redes preenchidos */}
-        {hasSocial && (
-          <div className="px-6 py-4 border-t border-slate-100 text-center">
-            <h2 className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: card.supportTextColor || '#94a3b8' }}>
-              Redes Profissionais
-            </h2>
-            <div className="flex items-center justify-center gap-3 flex-wrap">
-              {hasInstagram && (
+              {hasWhatsapp && (
                 <a
-                  href={`/cartao/${card.slug}/ir/instagram`}
-                  className="w-10 h-10 rounded-full bg-slate-100 hover:bg-pink-100 hover:text-pink-600 text-slate-700 flex items-center justify-center transition-colors shadow-xs"
-                  title="Instagram"
+                  href={`/cartao/${card.slug}/ir/whatsapp`}
+                  className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-all text-slate-800"
+                  style={{ backgroundColor: itemBg, boxShadow: itemShadow, border: itemBorder, color: itemTextColor }}
                 >
-                  <Instagram size={18} />
+                  <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                    <MessageCircle size={18} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[11px] text-slate-400 font-medium">WhatsApp Profissional</div>
+                    <div className="text-[13px] font-semibold truncate">
+                      {card.whatsappPhone}
+                    </div>
+                  </div>
                 </a>
               )}
-              {hasLinkedin && (
+
+              {hasPhone && (
                 <a
-                  href={`/cartao/${card.slug}/ir/linkedin`}
-                  className="w-10 h-10 rounded-full bg-slate-100 hover:bg-blue-100 hover:text-blue-700 text-slate-700 flex items-center justify-center transition-colors shadow-xs"
-                  title="LinkedIn"
+                  href={`tel:${card.phone!.replace(/\s+/g, '')}`}
+                  className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-all text-slate-800"
+                  style={{ backgroundColor: itemBg, boxShadow: itemShadow, border: itemBorder, color: itemTextColor }}
                 >
-                  <Linkedin size={18} />
+                  <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
+                    <Phone size={18} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[11px] text-slate-400 font-medium">Telefone</div>
+                    <div className="text-[13px] font-semibold truncate">
+                      {card.phone}
+                    </div>
+                  </div>
                 </a>
               )}
-              {hasFacebook && (
+
+              {hasEmail && (
                 <a
-                  href={`/cartao/${card.slug}/ir/facebook`}
-                  className="w-10 h-10 rounded-full bg-slate-100 hover:bg-indigo-100 hover:text-indigo-700 text-slate-700 flex items-center justify-center transition-colors shadow-xs"
-                  title="Facebook"
+                  href={`mailto:${card.email}`}
+                  className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-all text-slate-800"
+                  style={{ backgroundColor: itemBg, boxShadow: itemShadow, border: itemBorder, color: itemTextColor }}
                 >
-                  <Facebook size={18} />
+                  <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
+                    <Mail size={18} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[11px] text-slate-400 font-medium">E-mail</div>
+                    <div className="text-[13px] font-semibold truncate">
+                      {card.email}
+                    </div>
+                  </div>
                 </a>
               )}
-              {hasYoutube && (
+
+              {hasWebsite && (
                 <a
-                  href={`/cartao/${card.slug}/ir/youtube`}
-                  className="w-10 h-10 rounded-full bg-slate-100 hover:bg-red-100 hover:text-red-600 text-slate-700 flex items-center justify-center transition-colors shadow-xs"
-                  title="YouTube"
+                  href={`/cartao/${card.slug}/ir/website`}
+                  className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-all text-slate-800"
+                  style={{ backgroundColor: itemBg, boxShadow: itemShadow, border: itemBorder, color: itemTextColor }}
                 >
-                  <Youtube size={18} />
+                  <div className="w-8 h-8 rounded-lg bg-sky-100 text-sky-700 flex items-center justify-center shrink-0">
+                    <Globe size={18} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[11px] text-slate-400 font-medium">Website Oficial</div>
+                    <div className="text-[13px] font-semibold truncate">
+                      {card.websiteUrl!.replace(/^https?:\/\//, '')}
+                    </div>
+                  </div>
+                  <ExternalLink size={14} className="text-slate-400" />
+                </a>
+              )}
+
+              {hasLocation && (
+                <a
+                  href={`/cartao/${card.slug}/ir/maps`}
+                  className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-all text-slate-800"
+                  style={{ backgroundColor: itemBg, boxShadow: itemShadow, border: itemBorder, color: itemTextColor }}
+                >
+                  <div className="w-8 h-8 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center shrink-0">
+                    <MapPin size={18} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[11px] text-slate-400 font-medium">Localização</div>
+                    <div className="text-[13px] font-semibold truncate">
+                      {[card.address, card.addressNumber, card.city, card.state].filter(Boolean).join(', ')}
+                    </div>
+                  </div>
+                  <ExternalLink size={14} className="text-slate-400" />
                 </a>
               )}
             </div>
-          </div>
-        )}
+          );
+        })()}
+
+        {/* 7. Redes Sociais - Somente se houver links de redes preenchidos */}
+        {hasSocial && (() => {
+          const isNeu = isNeumorphismTheme(card.appearanceTheme);
+          const isNeuDark = card.appearanceTheme === 'neumorphism_dark';
+          const neuStyles = getNeumorphicCardStyles(isNeuDark);
+
+          return (
+            <div className="px-6 py-4 border-t border-slate-100/50 text-center">
+              <h2 className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: card.supportTextColor || '#94a3b8' }}>
+                Redes Profissionais
+              </h2>
+              <div className="flex items-center justify-center gap-3 flex-wrap">
+                {hasInstagram && (
+                  <a
+                    href={`/cartao/${card.slug}/ir/instagram`}
+                    className="w-10 h-10 rounded-full bg-slate-100 hover:bg-pink-100 hover:text-pink-600 text-slate-700 flex items-center justify-center transition-all"
+                    style={{
+                      backgroundColor: isNeu ? neuStyles.bg : undefined,
+                      boxShadow: isNeu ? neuStyles.raisedSubtle : undefined,
+                      border: isNeu ? neuStyles.border : undefined,
+                      color: isNeu ? neuStyles.textColor : undefined,
+                    }}
+                    title="Instagram"
+                  >
+                    <Instagram size={18} />
+                  </a>
+                )}
+                {hasLinkedin && (
+                  <a
+                    href={`/cartao/${card.slug}/ir/linkedin`}
+                    className="w-10 h-10 rounded-full bg-slate-100 hover:bg-blue-100 hover:text-blue-700 text-slate-700 flex items-center justify-center transition-all"
+                    style={{
+                      backgroundColor: isNeu ? neuStyles.bg : undefined,
+                      boxShadow: isNeu ? neuStyles.raisedSubtle : undefined,
+                      border: isNeu ? neuStyles.border : undefined,
+                      color: isNeu ? neuStyles.textColor : undefined,
+                    }}
+                    title="LinkedIn"
+                  >
+                    <Linkedin size={18} />
+                  </a>
+                )}
+                {hasFacebook && (
+                  <a
+                    href={`/cartao/${card.slug}/ir/facebook`}
+                    className="w-10 h-10 rounded-full bg-slate-100 hover:bg-indigo-100 hover:text-indigo-700 text-slate-700 flex items-center justify-center transition-all"
+                    style={{
+                      backgroundColor: isNeu ? neuStyles.bg : undefined,
+                      boxShadow: isNeu ? neuStyles.raisedSubtle : undefined,
+                      border: isNeu ? neuStyles.border : undefined,
+                      color: isNeu ? neuStyles.textColor : undefined,
+                    }}
+                    title="Facebook"
+                  >
+                    <Facebook size={18} />
+                  </a>
+                )}
+                {hasYoutube && (
+                  <a
+                    href={`/cartao/${card.slug}/ir/youtube`}
+                    className="w-10 h-10 rounded-full bg-slate-100 hover:bg-red-100 hover:text-red-600 text-slate-700 flex items-center justify-center transition-all"
+                    style={{
+                      backgroundColor: isNeu ? neuStyles.bg : undefined,
+                      boxShadow: isNeu ? neuStyles.raisedSubtle : undefined,
+                      border: isNeu ? neuStyles.border : undefined,
+                      color: isNeu ? neuStyles.textColor : undefined,
+                    }}
+                    title="YouTube"
+                  >
+                    <Youtube size={18} />
+                  </a>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* 8. QR Code Estilizável */}
         <div
@@ -811,100 +894,153 @@ export const DigitalCardPublic: React.FC<DigitalCardPublicProps> = ({ slug }) =>
                   aria-hidden="true"
                 />
 
-                {card.inquiryShowName !== false && (
-                  <div>
-                    <label className="block text-[11px] font-semibold mb-1" style={{ color: contentContrast.labelColor }}>
-                      Seu Nome (opcional)
-                    </label>
-                    <input
-                      type="text"
-                      value={inquiryName}
-                      onChange={(e) => setInquiryName(e.target.value)}
-                      maxLength={160}
-                      placeholder="Ex: Maria Santos"
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500 bg-slate-50 text-slate-900"
-                    />
-                  </div>
-                )}
-
-                <div className="grid grid-cols-1 gap-2">
-                  {card.inquiryShowEmail !== false && (
+                {card.inquiryShowName !== false && (() => {
+                  const isNeu = isNeumorphismTheme(card.appearanceTheme);
+                  const isNeuDark = card.appearanceTheme === 'neumorphism_dark';
+                  const neuStyles = getNeumorphicCardStyles(isNeuDark);
+                  return (
                     <div>
                       <label className="block text-[11px] font-semibold mb-1" style={{ color: contentContrast.labelColor }}>
-                        E-mail *
+                        Seu Nome (opcional)
                       </label>
                       <input
-                        type="email"
-                        value={inquiryEmail}
-                        onChange={(e) => setInquiryEmail(e.target.value)}
-                        maxLength={320}
-                        placeholder="seu@email.com"
-                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500 bg-slate-50 text-slate-900"
-                        required={card.inquiryShowEmail !== false}
+                        type="text"
+                        value={inquiryName}
+                        onChange={(e) => setInquiryName(e.target.value)}
+                        maxLength={160}
+                        placeholder="Ex: Maria Santos"
+                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500 bg-slate-50 text-slate-900 transition-all"
+                        style={{
+                          backgroundColor: isNeu ? (isNeuDark ? '#14161D' : '#E0E5EC') : undefined,
+                          boxShadow: isNeu ? neuStyles.inset : undefined,
+                          border: isNeu ? neuStyles.border : undefined,
+                          color: isNeu ? neuStyles.textColor : undefined,
+                        }}
                       />
                     </div>
-                  )}
-                  {card.inquiryShowPhone !== false && (
+                  );
+                })()}
+
+                {(() => {
+                  const isNeu = isNeumorphismTheme(card.appearanceTheme);
+                  const isNeuDark = card.appearanceTheme === 'neumorphism_dark';
+                  const neuStyles = getNeumorphicCardStyles(isNeuDark);
+                  const fieldBg = isNeu ? (isNeuDark ? '#14161D' : '#E0E5EC') : undefined;
+                  const fieldShadow = isNeu ? neuStyles.inset : undefined;
+                  const fieldBorder = isNeu ? neuStyles.border : undefined;
+                  const fieldTextColor = isNeu ? neuStyles.textColor : undefined;
+
+                  return (
+                    <div className="grid grid-cols-1 gap-2">
+                      {card.inquiryShowEmail !== false && (
+                        <div>
+                          <label className="block text-[11px] font-semibold mb-1" style={{ color: contentContrast.labelColor }}>
+                            E-mail *
+                          </label>
+                          <input
+                            type="email"
+                            value={inquiryEmail}
+                            onChange={(e) => setInquiryEmail(e.target.value)}
+                            maxLength={320}
+                            placeholder="seu@email.com"
+                            className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500 bg-slate-50 text-slate-900 transition-all"
+                            style={{
+                              backgroundColor: fieldBg,
+                              boxShadow: fieldShadow,
+                              border: fieldBorder,
+                              color: fieldTextColor,
+                            }}
+                            required={card.inquiryShowEmail !== false}
+                          />
+                        </div>
+                      )}
+                      {card.inquiryShowPhone !== false && (
+                        <div>
+                          <label className="block text-[11px] font-semibold mb-1" style={{ color: contentContrast.labelColor }}>
+                            WhatsApp *
+                          </label>
+                          <input
+                            type="tel"
+                            value={inquiryPhone}
+                            onChange={(e) => setInquiryPhone(e.target.value)}
+                            maxLength={32}
+                            placeholder="(11) 99999-9999"
+                            className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500 bg-slate-50 text-slate-900 transition-all"
+                            style={{
+                              backgroundColor: fieldBg,
+                              boxShadow: fieldShadow,
+                              border: fieldBorder,
+                              color: fieldTextColor,
+                            }}
+                            required={card.inquiryShowPhone !== false}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {card.inquiryShowMessage !== false && (() => {
+                  const isNeu = isNeumorphismTheme(card.appearanceTheme);
+                  const isNeuDark = card.appearanceTheme === 'neumorphism_dark';
+                  const neuStyles = getNeumorphicCardStyles(isNeuDark);
+                  return (
                     <div>
                       <label className="block text-[11px] font-semibold mb-1" style={{ color: contentContrast.labelColor }}>
-                        WhatsApp *
+                        Mensagem * (mín. 10 caracteres)
                       </label>
-                      <input
-                        type="tel"
-                        value={inquiryPhone}
-                        onChange={(e) => setInquiryPhone(e.target.value)}
-                        maxLength={32}
-                        placeholder="(11) 99999-9999"
-                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500 bg-slate-50 text-slate-900"
-                        required={card.inquiryShowPhone !== false}
+                      <textarea
+                        rows={3}
+                        value={inquiryMessage}
+                        onChange={(e) => setInquiryMessage(e.target.value)}
+                        maxLength={1200}
+                        placeholder="Olá, gostaria de saber mais sobre seus serviços..."
+                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500 bg-slate-50 text-slate-900 transition-all"
+                        style={{
+                          backgroundColor: isNeu ? (isNeuDark ? '#14161D' : '#E0E5EC') : undefined,
+                          boxShadow: isNeu ? neuStyles.inset : undefined,
+                          border: isNeu ? neuStyles.border : undefined,
+                          color: isNeu ? neuStyles.textColor : undefined,
+                        }}
+                        required
                       />
                     </div>
-                  )}
-                </div>
-
-                {card.inquiryShowMessage !== false && (
-                  <div>
-                    <label className="block text-[11px] font-semibold mb-1" style={{ color: contentContrast.labelColor }}>
-                      Mensagem * (mín. 10 caracteres)
-                    </label>
-                    <textarea
-                      rows={3}
-                      value={inquiryMessage}
-                      onChange={(e) => setInquiryMessage(e.target.value)}
-                      maxLength={1200}
-                      placeholder="Olá, gostaria de saber mais sobre seus serviços..."
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500 bg-slate-50 text-slate-900"
-                      required
-                    />
-                  </div>
-                )}
+                  );
+                })()}
 
                 {/* Consentimento Obrigatório com Alto Contraste Garantido */}
-                {card.inquiryShowConsent !== false && (
-                  <div
-                    className="flex items-start gap-2.5 p-2.5 rounded-xl border transition-colors"
-                    style={{
-                      backgroundColor: contentContrast.isDarkBg ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.03)',
-                      borderColor: contentContrast.isDarkBg ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.08)',
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      id="consent-check"
-                      checked={inquiryConsent}
-                      onChange={(e) => setInquiryConsent(e.target.checked)}
-                      className="mt-0.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500 cursor-pointer shrink-0 w-4 h-4"
-                      required
-                    />
-                    <label
-                      htmlFor="consent-check"
-                      className="text-xs font-medium cursor-pointer leading-snug select-none"
-                      style={{ color: contentContrast.consentColor }}
+                {card.inquiryShowConsent !== false && (() => {
+                  const isNeu = isNeumorphismTheme(card.appearanceTheme);
+                  const isNeuDark = card.appearanceTheme === 'neumorphism_dark';
+                  const neuStyles = getNeumorphicCardStyles(isNeuDark);
+                  return (
+                    <div
+                      className="flex items-start gap-2.5 p-2.5 rounded-xl border transition-all"
+                      style={{
+                        backgroundColor: isNeu ? (isNeuDark ? '#14161D' : '#E0E5EC') : (contentContrast.isDarkBg ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.03)'),
+                        borderColor: isNeu ? undefined : (contentContrast.isDarkBg ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.08)'),
+                        boxShadow: isNeu ? neuStyles.inset : undefined,
+                        border: isNeu ? neuStyles.border : undefined,
+                      }}
                     >
-                      Concordo em compartilhar meus dados de contato com {card.name} para fins de retorno desta mensagem.
-                    </label>
-                  </div>
-                )}
+                      <input
+                        type="checkbox"
+                        id="consent-check"
+                        checked={inquiryConsent}
+                        onChange={(e) => setInquiryConsent(e.target.checked)}
+                        className="mt-0.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500 cursor-pointer shrink-0 w-4 h-4"
+                        required
+                      />
+                      <label
+                        htmlFor="consent-check"
+                        className="text-xs font-medium cursor-pointer leading-snug select-none"
+                        style={{ color: contentContrast.consentColor }}
+                      >
+                        Concordo em compartilhar meus dados de contato com {card.name} para fins de retorno desta mensagem.
+                      </label>
+                    </div>
+                  );
+                })()}
 
                 {inquiryError && (
                   <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs">
@@ -912,18 +1048,30 @@ export const DigitalCardPublic: React.FC<DigitalCardPublicProps> = ({ slug }) =>
                   </div>
                 )}
 
-                <button
-                  type="submit"
-                  disabled={inquirySubmitting}
-                  className="w-full py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-md cursor-pointer disabled:opacity-50 hover:brightness-105 active:scale-[0.99]"
-                  style={{
-                    backgroundColor: card.buttonColor || '#1A7FBE',
-                    color: actionButtonTextColor,
-                  }}
-                >
-                  <Send size={13} />
-                  <span>{inquirySubmitting ? 'Enviando...' : 'Enviar mensagem'}</span>
-                </button>
+                {(() => {
+                  const isNeu = isNeumorphismTheme(card.appearanceTheme);
+                  const isNeuDark = card.appearanceTheme === 'neumorphism_dark';
+                  const neuStyles = getNeumorphicCardStyles(isNeuDark);
+                  const submitBg = card.buttonColor || (isNeu ? neuStyles.bg : '#1A7FBE');
+                  const submitText = card.buttonColor ? actionButtonTextColor : (isNeu ? neuStyles.textColor : actionButtonTextColor);
+
+                  return (
+                    <button
+                      type="submit"
+                      disabled={inquirySubmitting}
+                      className="w-full py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 hover:brightness-105 active:scale-[0.99]"
+                      style={{
+                        backgroundColor: submitBg,
+                        color: submitText,
+                        boxShadow: isNeu ? neuStyles.raised : '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                        border: isNeu ? neuStyles.border : undefined,
+                      }}
+                    >
+                      <Send size={13} />
+                      <span>{inquirySubmitting ? 'Enviando...' : 'Enviar mensagem'}</span>
+                    </button>
+                  );
+                })()}
               </form>
             )}
           </div>

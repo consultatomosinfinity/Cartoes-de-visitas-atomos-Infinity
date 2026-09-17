@@ -38,6 +38,90 @@ const CARDS_FILE = path.join(DATA_DIR, 'cards.json');
 const EVENTS_FILE = path.join(DATA_DIR, 'events.json');
 const INQUIRIES_FILE = path.join(DATA_DIR, 'inquiries.json');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
+const LANDING_TEMPLATE_FILE = path.join(DATA_DIR, 'landing_template.json');
+const SYSTEM_SETTINGS_FILE = path.join(DATA_DIR, 'system_settings.json');
+
+const DEFAULT_SYSTEM_SETTINGS = {
+  requireMasterApproval: false, // Padrão mantido: entra direto
+  defaultRole: 'cliente',       // Padrão mantido: entra como cliente
+  defaultPlan: 'degustacao',    // Padrão mantido: plano degustação
+  degustacaoDays: 30,           // Padrão mantido: 30 dias
+  allowPublicRegistration: true, // Padrão mantido: aberto
+  masterWhatsApp: '+55 (15) 99625-9353',
+  customWelcomeMessage: '',
+  updatedAt: new Date().toISOString(),
+};
+
+function getSystemSettings() {
+  const existing = readJson<any>(SYSTEM_SETTINGS_FILE, null);
+  if (!existing) {
+    writeJson(SYSTEM_SETTINGS_FILE, DEFAULT_SYSTEM_SETTINGS);
+    return DEFAULT_SYSTEM_SETTINGS;
+  }
+  return { ...DEFAULT_SYSTEM_SETTINGS, ...existing };
+}
+
+const DEFAULT_LANDING_TEMPLATE = {
+  id: 1,
+  userId: 1,
+  slug: 'jurandir-hora',
+  name: 'Jurandir Hora',
+  jobTitle: 'Diretor Executivo',
+  brandName: 'Átomos Infinity',
+  phone: '+55 (15) 99625-9353',
+  email: 'consultatomosinfinity@gmail.com',
+  whatsappPhone: '+55 (15) 99625-9353',
+  websiteUrl: 'https://consultatomosinfinity.com.br',
+  address: '',
+  addressNumber: '',
+  postalCode: '',
+  city: '',
+  state: '',
+  country: 'Brasil',
+  googleMapsUrl: '',
+  summary: 'Consultoria e inteligência estratégica empresarial pela Átomos Infinity.',
+  instagramUrl: '',
+  linkedinUrl: '',
+  facebookUrl: '',
+  youtubeUrl: '',
+  aiAgentUrl: 'https://wa.me/5515996259353?text=Ol%C3%A1%2C%20gostaria%20de%20informa%C3%A7%C3%B5es',
+  siteAiAgentEnabled: false,
+  aiAgentButtonColor: '#7C3AED',
+  aiAgentButtonText: 'Atendente Virtual IA',
+  aiAgentGlowEnabled: true,
+  aiAgentGlowIntensity: 'medio',
+  aiAgentButtonSize: 'padrao',
+  aiAgentButtonPaddingY: 12,
+  aiAgentButtonBorderWidth: 0,
+  aiAgentButtonBorderColor: '#A855F7',
+  ctaLabel: 'Conheça a Átomos Infinity',
+  ctaUrl: 'https://consultatomosinfinity.com.br',
+  footerText: 'Cartão digital disponibilizado por Átomos Infinity',
+  appearanceTheme: 'padrao',
+  backgroundColor: '#12375B',
+  headerOpacity: 100,
+  buttonColor: '#1A7FBE',
+  bodyColor: '#EAF1F7',
+  contentColor: '#FFFFFF',
+  contentOpacity: 100,
+  contactIconColor: '#1A507F',
+  contactIconSize: 18,
+  dividerColor: '#D7E0E7',
+  dividerWidth: 1,
+  qrCodeStyle: 'arredondado',
+  qrCodeForegroundColor: '#12375B',
+  qrCodeBackgroundColor: '#FFFFFF',
+  imageUrl: 'https://i.ibb.co/cKcG35kq/Jurandir.jpg',
+  companyLogoUrl: 'https://i.ibb.co/49XgSZd/Logo.jpg',
+  frameScale: 97,
+  companyLogoFocusX: 56,
+  companyLogoFocusY: 67,
+  mobileAppName: 'Jurandir Hora | Átomos Infinity',
+  trackingEnabled: true,
+  activityTrackingEnabled: true,
+  inquiryEnabled: true,
+  status: 'ativo',
+};
 
 // Memória de rate limit para formulário de contato (max 5 por cartão por hora)
 const inquirySubmissions: { cardId: number; timestamp: number }[] = [];
@@ -355,6 +439,72 @@ app.get('/api/cards/live-updates', (req, res) => {
     clearInterval(heartbeat);
     const idx = sseClients.findIndex((c) => c.id === clientId);
     if (idx !== -1) sseClients.splice(idx, 1);
+  });
+});
+
+// ----------------------------------------------------
+// MODELO PADRÃO DA LANDING PAGE (Configurável pelo Master)
+// ----------------------------------------------------
+app.get(['/api/settings/landing-card', '/api/landing-card'], (req, res) => {
+  setNoCacheHeaders(res);
+  const template = readJson<any>(LANDING_TEMPLATE_FILE, null);
+  if (template) {
+    return res.json(template);
+  }
+  // Fallback: se não existir arquivo específico de template salvo, tenta pegar o primeiro cartão se existir, ou o default
+  const cards = readJson<any[]>(CARDS_FILE, []);
+  if (cards.length > 0) {
+    return res.json(cards[0]);
+  }
+  return res.json(DEFAULT_LANDING_TEMPLATE);
+});
+
+app.put('/api/settings/landing-card', (req, res) => {
+  const body = req.body;
+  if (!body) {
+    return res.status(400).json({ error: 'Dados do modelo são obrigatórios.' });
+  }
+
+  // Normalização do AI Agent
+  let aiAgentUrl = body.aiAgentUrl;
+  if (aiAgentUrl) {
+    aiAgentUrl = normalizeAiAgentInput(aiAgentUrl) || aiAgentUrl;
+  }
+
+  const existing = readJson<any>(LANDING_TEMPLATE_FILE, DEFAULT_LANDING_TEMPLATE);
+
+  const updatedTemplate = {
+    ...DEFAULT_LANDING_TEMPLATE,
+    ...existing,
+    ...body,
+    aiAgentUrl: aiAgentUrl !== undefined ? aiAgentUrl : (existing.aiAgentUrl || ''),
+    updatedAt: new Date().toISOString(),
+  };
+
+  writeJson(LANDING_TEMPLATE_FILE, updatedTemplate);
+
+  // Notifica clientes em tempo real
+  notifyCardUpdate({ ...updatedTemplate, slug: updatedTemplate.slug || 'jurandir-hora' }, 'updated');
+
+  return res.json({
+    success: true,
+    message: 'Modelo padrão da Landing Page atualizado com sucesso!',
+    template: updatedTemplate,
+  });
+});
+
+app.post('/api/settings/landing-card/reset', (req, res) => {
+  const freshTemplate = {
+    ...DEFAULT_LANDING_TEMPLATE,
+    updatedAt: new Date().toISOString(),
+  };
+  writeJson(LANDING_TEMPLATE_FILE, freshTemplate);
+  notifyCardUpdate({ ...freshTemplate, slug: freshTemplate.slug || 'jurandir-hora' }, 'updated');
+
+  return res.json({
+    success: true,
+    message: 'Modelo da Landing Page restaurado para os padrões de fábrica!',
+    template: freshTemplate,
   });
 });
 
@@ -989,6 +1139,157 @@ app.post('/api/admin/users/:id/reset-password', async (req, res) => {
   } catch (err: any) {
     console.error('Erro ao redefinir senha:', err);
     return res.status(500).json({ error: err.message || 'Erro ao redefinir senha.' });
+  }
+});
+
+// ----------------------------------------------------
+// 6. APIS DE CONFIGURAÇÕES DE POLÍTICAS DE CADASTRO E SISTEMA
+// ----------------------------------------------------
+
+// Obter configurações gerais do sistema
+app.get('/api/system-settings', (req, res) => {
+  setNoCacheHeaders(res);
+  res.json(getSystemSettings());
+});
+
+// Atualizar configurações do sistema (Master Only)
+app.put('/api/system-settings', (req, res) => {
+  try {
+    const current = getSystemSettings();
+    const {
+      requireMasterApproval,
+      defaultRole,
+      defaultPlan,
+      degustacaoDays,
+      allowPublicRegistration,
+      masterWhatsApp,
+      customWelcomeMessage,
+    } = req.body;
+
+    const updated = {
+      ...current,
+      ...(requireMasterApproval !== undefined ? { requireMasterApproval: Boolean(requireMasterApproval) } : {}),
+      ...(defaultRole !== undefined ? { defaultRole } : {}),
+      ...(defaultPlan !== undefined ? { defaultPlan } : {}),
+      ...(degustacaoDays !== undefined
+        ? { degustacaoDays: Math.max(1, parseInt(degustacaoDays, 10) || 30) }
+        : {}),
+      ...(allowPublicRegistration !== undefined ? { allowPublicRegistration: Boolean(allowPublicRegistration) } : {}),
+      ...(masterWhatsApp !== undefined ? { masterWhatsApp: String(masterWhatsApp).trim() } : {}),
+      ...(customWelcomeMessage !== undefined ? { customWelcomeMessage: String(customWelcomeMessage) } : {}),
+      updatedAt: new Date().toISOString(),
+    };
+
+    writeJson(SYSTEM_SETTINGS_FILE, updated);
+    return res.json({ success: true, settings: updated });
+  } catch (err: any) {
+    console.error('Erro ao salvar configurações do sistema:', err);
+    return res.status(500).json({ error: err.message || 'Erro ao salvar configurações.' });
+  }
+});
+
+// Hook de Onboarding após auto-cadastro
+app.post('/api/auth/onboarding-profile', async (req, res) => {
+  try {
+    const { userId, email, fullName } = req.body;
+    if (!email || !userId) {
+      return res.status(400).json({ error: 'Identificador e e-mail são obrigatórios.' });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const isMaster = MASTER_EMAILS.includes(cleanEmail);
+    const settings = getSystemSettings();
+
+    if (!isMaster && !settings.allowPublicRegistration) {
+      return res.status(403).json({
+        error: 'Novos auto-cadastros estão desativados pelo Administrador Master. Entre em contato para liberação.',
+      });
+    }
+
+    const role = isMaster ? 'master' : (settings.defaultRole || 'cliente');
+    const plan = isMaster ? 'corporativo' : (settings.defaultPlan || 'degustacao');
+    const status = isMaster ? 'ativo' : (settings.requireMasterApproval ? 'pausado' : 'ativo');
+    const degustacaoDays = settings.degustacaoDays || 30;
+    const degustacaoExpiresAt = new Date(Date.now() + degustacaoDays * 86400000).toISOString();
+
+    const profileData = {
+      id: userId,
+      email: cleanEmail,
+      fullName: fullName || '',
+      role,
+      plan,
+      status,
+      degustacaoDays,
+      degustacaoExpiresAt,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (supabaseAdmin) {
+      try {
+        await supabaseAdmin.from('profiles').upsert({
+          id: userId,
+          email: cleanEmail,
+          full_name: fullName || '',
+          role,
+          plan,
+          status,
+          updated_at: new Date().toISOString(),
+        });
+      } catch (err) {
+        console.warn('Falha ao sincronizar perfil de auto-cadastro com Supabase:', err);
+      }
+    }
+
+    const localUsers = readJson<any[]>(USERS_FILE, []);
+    const existingIndex = localUsers.findIndex(
+      (u) => u.id === userId || u.email?.toLowerCase() === cleanEmail
+    );
+
+    if (existingIndex !== -1) {
+      localUsers[existingIndex] = { ...localUsers[existingIndex], ...profileData };
+    } else {
+      localUsers.push(profileData);
+    }
+    writeJson(USERS_FILE, localUsers);
+
+    return res.json({ success: true, profile: profileData, settings });
+  } catch (err: any) {
+    console.error('Erro ao processar perfil de cadastro:', err);
+    return res.status(500).json({ error: err.message || 'Erro ao registrar perfil.' });
+  }
+});
+
+// Aprovação rápida de usuário pelo Master (com 1 clique)
+app.post('/api/admin/users/:id/approve', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const localUsers = readJson<any[]>(USERS_FILE, []);
+    const userIndex = localUsers.findIndex((u) => u.id === id || String(u.id) === String(id));
+
+    if (userIndex === -1) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+
+    localUsers[userIndex].status = 'ativo';
+    localUsers[userIndex].updatedAt = new Date().toISOString();
+    writeJson(USERS_FILE, localUsers);
+
+    if (supabaseAdmin) {
+      try {
+        await supabaseAdmin.from('profiles').update({
+          status: 'ativo',
+          updated_at: new Date().toISOString(),
+        }).eq('id', id);
+      } catch (err) {
+        console.warn('Falha ao aprovar no Supabase:', err);
+      }
+    }
+
+    return res.json({ success: true, message: 'Usuário aprovado e ativado com sucesso!', user: localUsers[userIndex] });
+  } catch (err: any) {
+    console.error('Erro ao aprovar usuário:', err);
+    return res.status(500).json({ error: err.message || 'Erro ao aprovar usuário.' });
   }
 });
 

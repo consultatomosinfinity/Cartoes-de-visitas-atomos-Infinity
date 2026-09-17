@@ -6,6 +6,8 @@ interface DigitalCardDualPortholeProps {
   companyLogoUrl?: string;
   brandName?: string;
   frameScale?: number;
+  imageFocusX?: number;
+  imageFocusY?: number;
   companyLogoFocusX?: number;
   companyLogoFocusY?: number;
   borderColor?: string;
@@ -17,6 +19,8 @@ export const DigitalCardDualPorthole: React.FC<DigitalCardDualPortholeProps> = (
   companyLogoUrl,
   brandName,
   frameScale = 97,
+  imageFocusX = 50,
+  imageFocusY = 50,
   companyLogoFocusX = 56,
   companyLogoFocusY = 67,
   borderColor = '#FFFFFF',
@@ -40,6 +44,9 @@ export const DigitalCardDualPorthole: React.FC<DigitalCardDualPortholeProps> = (
               alt={name}
               referrerPolicy="no-referrer"
               className="w-full h-full object-cover"
+              style={{
+                objectPosition: `${imageFocusX}% ${imageFocusY}%`,
+              }}
               onError={(e) => {
                 // Fallback para iniciais
                 (e.target as HTMLElement).style.display = 'none';
