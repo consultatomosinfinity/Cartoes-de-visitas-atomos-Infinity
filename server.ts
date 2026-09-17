@@ -1124,7 +1124,14 @@ app.post('/api/admin/users/:id/reset-password', async (req, res) => {
         const { error } = await supabaseAdmin.auth.admin.updateUserById(id, {
           password: newPassword,
           email_confirm: true,
+          user_metadata: {
+            email_verified: true,
+          },
         });
+        // Atualiza também via SQL direto para garantir bypass da confirmação de e-mail no Supabase Auth se necessário
+        try {
+          await supabaseAdmin.from('auth.users').update({ email_confirmed_at: new Date().toISOString() }).eq('id', id);
+        } catch (e) {}
         if (error) throw error;
         return res.json({ success: true, message: 'Senha atualizada diretamente para o usuário!' });
       } else if (email) {
