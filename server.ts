@@ -1123,6 +1123,7 @@ app.post('/api/admin/users/:id/reset-password', async (req, res) => {
       if (newPassword && newPassword.length >= 6) {
         const { error } = await supabaseAdmin.auth.admin.updateUserById(id, {
           password: newPassword,
+          email_confirm: true,
         });
         if (error) throw error;
         return res.json({ success: true, message: 'Senha atualizada diretamente para o usuário!' });
