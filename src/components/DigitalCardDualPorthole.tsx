@@ -1,4 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
+
+// Avatar padrão de alta simpatia e elegância profissional: gato cartoon de gravata
+export const DEFAULT_AVATAR_URL = '/default-cat-avatar.jpg';
 
 interface DigitalCardDualPortholeProps {
   imageUrl?: string;
@@ -25,11 +28,13 @@ export const DigitalCardDualPorthole: React.FC<DigitalCardDualPortholeProps> = (
   companyLogoFocusY = 67,
   borderColor = '#FFFFFF',
 }) => {
+  const [imageLoadError, setImageLoadError] = useState(false);
   const scaleFraction = Math.max(0.7, Math.min(1.2, frameScale / 100));
+  const effectiveImageUrl = imageUrl && imageUrl.trim() ? imageUrl.trim() : DEFAULT_AVATAR_URL;
 
   return (
     <div className="relative inline-block mx-auto mb-4 select-none">
-      {/* Moldura circular principal (Foto do Colaborador) */}
+      {/* Moldura circular principal (Foto do Colaborador / Avatar Padrão) */}
       <div
         className="relative rounded-full p-1.5 shadow-xl transition-transform duration-300"
         style={{
@@ -38,18 +43,22 @@ export const DigitalCardDualPorthole: React.FC<DigitalCardDualPortholeProps> = (
         }}
       >
         <div className="w-28 h-28 rounded-full overflow-hidden bg-slate-200 flex items-center justify-center border-2 border-slate-100/30">
-          {imageUrl ? (
+          {!imageLoadError ? (
             <img
-              src={imageUrl}
-              alt={name}
+              src={effectiveImageUrl}
+              alt={name || 'Avatar'}
               referrerPolicy="no-referrer"
               className="w-full h-full object-cover"
               style={{
                 objectPosition: `${imageFocusX}% ${imageFocusY}%`,
               }}
-              onError={(e) => {
-                // Fallback para iniciais
-                (e.target as HTMLElement).style.display = 'none';
+              onError={() => {
+                if (effectiveImageUrl !== DEFAULT_AVATAR_URL) {
+                  // Tenta o avatar padrão do gato de gravata antes de desistir
+                  setImageLoadError(false);
+                } else {
+                  setImageLoadError(true);
+                }
               }}
             />
           ) : (

@@ -1,0 +1,135 @@
+{
+  "folders": [
+    {
+      "id": "corporativo",
+      "name": "Corporativo & Executivo",
+      "description": "Fundos sóbrios e profissionais para cartões executivos",
+      "icon": "Briefcase",
+      "order": 1
+    },
+    {
+      "id": "tecnologia",
+      "name": "Tecnologia & Inovação",
+      "description": "Linhas digitais, conexões e visual moderno",
+      "icon": "Cpu",
+      "order": 2
+    },
+    {
+      "id": "gradientes",
+      "name": "Gradientes & Modernos",
+      "description": "Transições suaves de cores vibrantes e elegantes",
+      "icon": "Palette",
+      "order": 3
+    },
+    {
+      "id": "texturas",
+      "name": "Texturas & Minimalistas",
+      "description": "Padrões geométricos discretos e neutros",
+      "icon": "Layers",
+      "order": 4
+    },
+    {
+      "id": "atomosinfinity",
+      "name": "Atomosinfinity",
+      "description": "Coleção do autor",
+      "icon": "Folder",
+      "order": 5
+    },
+    {
+      "id": "icones-logos",
+      "name": "Ícones, Logos & Favicons",
+      "description": "Modelos padrão para logomarca, ícone de celular e favicon da aba",
+      "icon": "Sparkles",
+      "order": 6
+    },
+    {
+      "id": "avatares",
+      "name": "Avatares & Fotos Padrão",
+      "description": "Avatares ilustrados e fotos de perfil padrão",
+      "icon": "User",
+      "order": 7
+    }
+  ],
+  "items": [
+    {
+      "id": "avatar-gato-gravata",
+      "title": "Gato de Gravata Executivo",
+      "folderId": "avatares",
+      "url": "/default-cat-avatar.jpg",
+      "thumbnailUrl": "/default-cat-avatar.jpg",
+      "recommendedTheme": "personalizado"
+    },
+    {
+      "id": "icon-atomos-infinity",
+      "title": "Ícone Átomos Infinity PWA",
+      "folderId": "icones-logos",
+      "url": "/icon-192.png",
+      "thumbnailUrl": "/icon-192.png",
+      "recommendedTheme": "personalizado"
+    },
+    {
+      "id": "corp-dark-navy",
+      "title": "Dark Navy Minimalist",
+      "folderId": "corporativo",
+      "url": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1200&q=80",
+      "thumbnailUrl": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=300&q=70",
+      "recommendedTheme": "escuro"
+    },
+    {
+      "id": "corp-slate-geometry",
+      "title": "Slate Architecture & Glass",
+      "folderId": "corporativo",
+      "url": "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=1200&q=80",
+      "thumbnailUrl": "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=300&q=70",
+      "recommendedTheme": "padrao"
+    },
+    {
+      "id": "tech-cyber-mesh",
+      "title": "Digital Cyber Mesh Blue",
+      "folderId": "tecnologia",
+      "url": "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=1200&q=80",
+      "thumbnailUrl": "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=300&q=70",
+      "recommendedTheme": "escuro"
+    },
+    {
+      "id": "tech-neon-circuit",
+      "title": "Deep Indigo Waves",
+      "folderId": "tecnologia",
+      "url": "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=1200&q=80",
+      "thumbnailUrl": "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=300&q=70",
+      "recommendedTheme": "escuro"
+    },
+    {
+      "id": "grad-aurora-sunset",
+      "title": "Aurora Sunset Gradient",
+      "folderId": "gradientes",
+      "url": "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?auto=format&fit=crop&w=1200&q=80",
+      "thumbnailUrl": "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?auto=format&fit=crop&w=300&q=70",
+      "recommendedTheme": "personalizado"
+    },
+    {
+      "id": "grad-ocean-mist",
+      "title": "Cyan & Cobalt Wave",
+      "folderId": "gradientes",
+      "url": "https://images.unsplash.com/photo-1557683316-973673baf926?auto=format&fit=crop&w=1200&q=80",
+      "thumbnailUrl": "https://images.unsplash.com/photo-1557683316-973673baf926?auto=format&fit=crop&w=300&q=70",
+      "recommendedTheme": "personalizado"
+    },
+    {
+      "id": "text-hex-gold",
+      "title": "Geometric Carbon Texture",
+      "folderId": "texturas",
+      "url": "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1200&q=80",
+      "thumbnailUrl": "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=300&q=70",
+      "recommendedTheme": "escuro"
+    },
+    {
+      "id": "text-white-marble",
+      "title": "Soft White Carrara Marble",
+      "folderId": "texturas",
+      "url": "https://images.unsplash.com/photo-1604014237800-1c9102c219da?auto=format&fit=crop&w=1200&q=80",
+      "thumbnailUrl": "https://images.unsplash.com/photo-1604014237800-1c9102c219da?auto=format&fit=crop&w=300&q=70",
+      "recommendedTheme": "claro"
+    }
+  ]
+}

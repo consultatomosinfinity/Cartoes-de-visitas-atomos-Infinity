@@ -40,6 +40,109 @@ const INQUIRIES_FILE = path.join(DATA_DIR, 'inquiries.json');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 const LANDING_TEMPLATE_FILE = path.join(DATA_DIR, 'landing_template.json');
 const SYSTEM_SETTINGS_FILE = path.join(DATA_DIR, 'system_settings.json');
+const WALLPAPERS_FILE = path.join(DATA_DIR, 'wallpapers.json');
+
+const DEFAULT_WALLPAPERS_DATA = {
+  folders: [
+    { id: 'corporativo', name: 'Corporativo & Executivo', description: 'Fundos sóbrios e profissionais para cartões executivos', icon: 'Briefcase', order: 1 },
+    { id: 'tecnologia', name: 'Tecnologia & Inovação', description: 'Linhas digitais, conexões e visual moderno', icon: 'Cpu', order: 2 },
+    { id: 'gradientes', name: 'Gradientes & Modernos', description: 'Transições suaves de cores vibrantes e elegantes', icon: 'Palette', order: 3 },
+    { id: 'texturas', name: 'Texturas & Minimalistas', description: 'Padrões geométricos discretos e neutros', icon: 'Layers', order: 4 },
+    { id: 'icones-logos', name: 'Ícones, Logos & Favicons', description: 'Modelos padrão para logomarca, ícone de celular e favicon da aba', icon: 'Sparkles', order: 5 },
+    { id: 'avatares', name: 'Avatares & Fotos Padrão', description: 'Avatares ilustrados e fotos de perfil padrão', icon: 'User', order: 6 },
+  ],
+  items: [
+    {
+      id: 'avatar-gato-gravata',
+      title: 'Gato de Gravata Executivo',
+      folderId: 'avatares',
+      url: '/default-cat-avatar.jpg',
+      thumbnailUrl: '/default-cat-avatar.jpg',
+      recommendedTheme: 'personalizado',
+    },
+    {
+      id: 'icon-atomos-infinity',
+      title: 'Ícone Átomos Infinity PWA',
+      folderId: 'icones-logos',
+      url: '/icon-192.png',
+      thumbnailUrl: '/icon-192.png',
+      recommendedTheme: 'personalizado',
+    },
+    {
+      id: 'corp-dark-navy',
+      title: 'Dark Navy Minimalist',
+      folderId: 'corporativo',
+      url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1200&q=80',
+      thumbnailUrl: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=300&q=70',
+      recommendedTheme: 'escuro',
+    },
+    {
+      id: 'corp-slate-geometry',
+      title: 'Slate Architecture & Glass',
+      folderId: 'corporativo',
+      url: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=1200&q=80',
+      thumbnailUrl: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=300&q=70',
+      recommendedTheme: 'padrao',
+    },
+    {
+      id: 'tech-cyber-mesh',
+      title: 'Digital Cyber Mesh Blue',
+      folderId: 'tecnologia',
+      url: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=1200&q=80',
+      thumbnailUrl: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=300&q=70',
+      recommendedTheme: 'escuro',
+    },
+    {
+      id: 'tech-neon-circuit',
+      title: 'Deep Indigo Waves',
+      folderId: 'tecnologia',
+      url: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=1200&q=80',
+      thumbnailUrl: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=300&q=70',
+      recommendedTheme: 'escuro',
+    },
+    {
+      id: 'grad-aurora-sunset',
+      title: 'Aurora Sunset Gradient',
+      folderId: 'gradientes',
+      url: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?auto=format&fit=crop&w=1200&q=80',
+      thumbnailUrl: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?auto=format&fit=crop&w=300&q=70',
+      recommendedTheme: 'personalizado',
+    },
+    {
+      id: 'grad-ocean-mist',
+      title: 'Cyan & Cobalt Wave',
+      folderId: 'gradientes',
+      url: 'https://images.unsplash.com/photo-1557683316-973673baf926?auto=format&fit=crop&w=1200&q=80',
+      thumbnailUrl: 'https://images.unsplash.com/photo-1557683316-973673baf926?auto=format&fit=crop&w=300&q=70',
+      recommendedTheme: 'personalizado',
+    },
+    {
+      id: 'text-hex-gold',
+      title: 'Geometric Carbon Texture',
+      folderId: 'texturas',
+      url: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1200&q=80',
+      thumbnailUrl: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=300&q=70',
+      recommendedTheme: 'escuro',
+    },
+    {
+      id: 'text-white-marble',
+      title: 'Soft White Carrara Marble',
+      folderId: 'texturas',
+      url: 'https://images.unsplash.com/photo-1604014237800-1c9102c219da?auto=format&fit=crop&w=1200&q=80',
+      thumbnailUrl: 'https://images.unsplash.com/photo-1604014237800-1c9102c219da?auto=format&fit=crop&w=300&q=70',
+      recommendedTheme: 'claro',
+    },
+  ],
+};
+
+function getWallpapersData() {
+  const existing = readJson<any>(WALLPAPERS_FILE, null);
+  if (!existing || !Array.isArray(existing.folders)) {
+    writeJson(WALLPAPERS_FILE, DEFAULT_WALLPAPERS_DATA);
+    return DEFAULT_WALLPAPERS_DATA;
+  }
+  return existing;
+}
 
 const DEFAULT_SYSTEM_SETTINGS = {
   requireMasterApproval: false, // Padrão mantido: entra direto
@@ -1298,6 +1401,138 @@ app.post('/api/admin/users/:id/approve', async (req, res) => {
   } catch (err: any) {
     console.error('Erro ao aprovar usuário:', err);
     return res.status(500).json({ error: err.message || 'Erro ao aprovar usuário.' });
+  }
+});
+
+// ----------------------------------------------------
+// 7. BIBLIOTECA DE PAPÉIS DE PAREDE / FUNDOS DO SISTEMA
+// ----------------------------------------------------
+
+// Listar todas as pastas e fundos disponíveis
+app.get('/api/wallpapers', (req, res) => {
+  setNoCacheHeaders(res);
+  const data = getWallpapersData();
+  res.json(data);
+});
+
+// Criar pasta de fundos (Master)
+app.post('/api/wallpapers/folders', (req, res) => {
+  try {
+    const { name, description, icon } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'Nome da pasta é obrigatório.' });
+    }
+
+    const data = getWallpapersData();
+    const id = name.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-');
+    
+    if (data.folders.some((f: any) => f.id === id)) {
+      return res.status(400).json({ error: 'Já existe uma categoria ou pasta com esse identificador.' });
+    }
+
+    const newFolder = {
+      id,
+      name: name.trim(),
+      description: (description || '').trim(),
+      icon: icon || 'Folder',
+      order: data.folders.length + 1,
+    };
+
+    data.folders.push(newFolder);
+    writeJson(WALLPAPERS_FILE, data);
+    return res.status(201).json({ success: true, folder: newFolder, folders: data.folders });
+  } catch (err: any) {
+    console.error('Erro ao criar pasta de fundos:', err);
+    return res.status(500).json({ error: err.message || 'Erro ao criar pasta.' });
+  }
+});
+
+// Excluir pasta de fundos (Master)
+app.delete('/api/wallpapers/folders/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    if (id === 'corporativo') {
+      return res.status(400).json({ error: 'A pasta corporativa padrão não pode ser excluída.' });
+    }
+
+    const data = getWallpapersData();
+    data.folders = data.folders.filter((f: any) => f.id !== id);
+    // Remove os itens dessa pasta da biblioteca
+    data.items = data.items.filter((item: any) => item.folderId !== id);
+    writeJson(WALLPAPERS_FILE, data);
+    return res.json({ success: true, folders: data.folders, items: data.items });
+  } catch (err: any) {
+    console.error('Erro ao excluir pasta:', err);
+    return res.status(500).json({ error: err.message || 'Erro ao excluir pasta.' });
+  }
+});
+
+// Adicionar novo papel de parede / fundo (Master) - via URL ou Upload Base64 no public/wallpapers
+app.post('/api/wallpapers/items', (req, res) => {
+  try {
+    const { title, url, base64Data, fileName, folderId, recommendedTheme } = req.body;
+
+    if (!title || !title.trim()) {
+      return res.status(400).json({ error: 'Título do fundo é obrigatório.' });
+    }
+
+    let finalUrl = url ? url.trim() : '';
+
+    // Se foi enviado arquivo base64, salva no diretório estático public/wallpapers
+    if (base64Data) {
+      const match = base64Data.match(/^data:image\/([a-zA-Z0-9+]+);base64,(.+)$/);
+      if (match) {
+        const ext = match[1] === 'jpeg' ? 'jpg' : match[1];
+        const buffer = Buffer.from(match[2], 'base64');
+        const cleanName = (fileName || 'wallpaper').toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 30);
+        const savedFileName = `${Date.now()}-${cleanName}.${ext}`;
+        const savePath = path.join(process.cwd(), 'public', 'wallpapers', savedFileName);
+        fs.writeFileSync(savePath, buffer);
+        finalUrl = `/wallpapers/${savedFileName}`;
+      }
+    }
+
+    if (!finalUrl) {
+      return res.status(400).json({ error: 'Informe a URL da imagem (ou envie um arquivo).' });
+    }
+
+    const data = getWallpapersData();
+    const newItem = {
+      id: `wp-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      title: title.trim(),
+      url: finalUrl,
+      thumbnailUrl: finalUrl,
+      folderId: folderId || (data.folders[0]?.id || 'corporativo'),
+      recommendedTheme: recommendedTheme || 'personalizado',
+      createdAt: new Date().toISOString(),
+    };
+
+    data.items.unshift(newItem);
+    writeJson(WALLPAPERS_FILE, data);
+    return res.status(201).json({ success: true, item: newItem, items: data.items });
+  } catch (err: any) {
+    console.error('Erro ao adicionar fundo:', err);
+    return res.status(500).json({ error: err.message || 'Erro ao adicionar fundo.' });
+  }
+});
+
+// Excluir papel de parede da biblioteca (Master)
+app.delete('/api/wallpapers/items/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const data = getWallpapersData();
+    const item = data.items.find((i: any) => i.id === id);
+    if (item && item.url.startsWith('/wallpapers/')) {
+      const localFilePath = path.join(process.cwd(), 'public', item.url);
+      if (fs.existsSync(localFilePath)) {
+        try { fs.unlinkSync(localFilePath); } catch (e) {}
+      }
+    }
+    data.items = data.items.filter((i: any) => i.id !== id);
+    writeJson(WALLPAPERS_FILE, data);
+    return res.json({ success: true, items: data.items });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Erro ao excluir fundo.' });
   }
 });
 

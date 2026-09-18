@@ -58,6 +58,7 @@ import { ThemeToggle } from '../components/ThemeToggle.tsx';
 import { useAuth } from '../contexts/AuthContext.tsx';
 import { initSupabase, uploadCardAsset, mapDbToDigitalCard, mapDigitalCardToDb } from '../lib/supabase.ts';
 import { AdminUsersManager } from '../components/AdminUsersManager.tsx';
+import { WallpapersLibraryModal } from '../components/WallpapersLibraryModal.tsx';
 import { HelpCenterModal } from '../components/HelpCenterModal.tsx';
 
 export const DigitalCardsManager: React.FC = () => {
@@ -162,6 +163,9 @@ export const DigitalCardsManager: React.FC = () => {
   const [inquiries, setInquiries] = useState<DigitalCardInquiry[]>([]);
   const [activeTab, setActiveTab] = useState<'editor' | 'metrics' | 'inquiries'>('editor');
   const [showPreview, setShowPreview] = useState(true);
+  const [showWallpapersModal, setShowWallpapersModal] = useState(false);
+  const [libraryTargetField, setLibraryTargetField] = useState<'wallpaper' | 'foto' | 'logo' | 'mobileIcon'>('wallpaper');
+  const [libraryInitialFolder, setLibraryInitialFolder] = useState<string>('all');
 
   // Carrega todos os cartões (Supabase DB se autenticado, com fallback local)
   const fetchCards = async () => {
@@ -1280,6 +1284,16 @@ export const DigitalCardsManager: React.FC = () => {
 
                   <button
                     type="button"
+                    onClick={() => setShowWallpapersModal(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border border-sky-200 dark:border-sky-800 bg-sky-50 hover:bg-sky-100 dark:bg-sky-950/40 dark:hover:bg-sky-900/60 text-sky-700 dark:text-sky-300 transition-all cursor-pointer shadow-xs"
+                    title="Abrir a Biblioteca de Papéis de Parede e Fundos"
+                  >
+                    <Layers size={13} className="text-sky-600" />
+                    <span>Galeria de Fundos</span>
+                  </button>
+
+                  <button
+                    type="button"
                     onClick={() => setShowResetModal(true)}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-all cursor-pointer shadow-xs"
                     title={isEditingLandingTemplate ? "Restaurar o modelo da Landing Page para o padrão de fábrica" : "Voltar o cartão ao estado original sem imagens e com a estrutura básica"}
@@ -1486,6 +1500,19 @@ export const DigitalCardsManager: React.FC = () => {
                               Foto do Colaborador
                             </label>
                             <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setLibraryTargetField('foto');
+                                  setLibraryInitialFolder('avatares');
+                                  setShowWallpapersModal(true);
+                                }}
+                                className="px-2.5 py-1 text-[11px] font-semibold bg-sky-50 dark:bg-sky-950/60 hover:bg-sky-100 dark:hover:bg-sky-900/80 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800 rounded-lg cursor-pointer flex items-center gap-1 shadow-xs transition-colors"
+                                title="Escolher uma foto ou avatar da biblioteca do sistema"
+                              >
+                                <Sparkles size={12} className="text-sky-600 dark:text-sky-400" />
+                                <span>Galeria de Imagens</span>
+                              </button>
                               <label className="px-2.5 py-1 text-[11px] font-semibold bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg cursor-pointer flex items-center gap-1 shadow-xs transition-colors">
                                 <Upload size={12} />
                                 <span>Carregar</span>
@@ -1510,24 +1537,35 @@ export const DigitalCardsManager: React.FC = () => {
                           </div>
 
                           <div className="flex items-center gap-2.5">
-                            {editingCard.imageUrl ? (
-                              <img
-                                src={editingCard.imageUrl}
-                                alt="Foto Preview"
-                                referrerPolicy="no-referrer"
-                                className="w-10 h-10 rounded-xl object-cover border border-slate-200 shadow-xs shrink-0"
-                              />
-                            ) : (
-                              <div className="w-10 h-10 rounded-xl bg-slate-200 text-slate-400 flex items-center justify-center shrink-0">
-                                <ImageIcon size={18} />
+                            <div className="relative shrink-0 flex items-center justify-center">
+                              {editingCard.imageUrl ? (
+                                <img
+                                  src={editingCard.imageUrl}
+                                  alt="Foto Preview"
+                                  referrerPolicy="no-referrer"
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = 'none';
+                                    const fallback = e.currentTarget.parentElement?.querySelector('.photo-placeholder-fallback');
+                                    if (fallback) (fallback as HTMLElement).style.display = 'flex';
+                                  }}
+                                  className="w-10 h-10 rounded-xl object-cover border border-slate-200 dark:border-slate-700 shadow-xs shrink-0"
+                                />
+                              ) : null}
+                              <div
+                                className={`w-10 h-10 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-500 items-center justify-center shrink-0 border border-slate-200 dark:border-slate-700 photo-placeholder-fallback ${
+                                  editingCard.imageUrl ? 'hidden' : 'flex'
+                                }`}
+                                title="Nenhuma foto selecionada"
+                              >
+                                <User size={18} />
                               </div>
-                            )}
+                            </div>
                             <input
                               type="url"
                               value={editingCard.imageUrl || ''}
                               onChange={(e) => setEditingCard({ ...editingCard, imageUrl: e.target.value })}
                               placeholder="URL da foto (https://...)"
-                              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white"
+                              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder:text-slate-400"
                             />
                           </div>
 
@@ -1584,6 +1622,19 @@ export const DigitalCardsManager: React.FC = () => {
                               </span>
                             </div>
                             <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setLibraryTargetField('logo');
+                                  setLibraryInitialFolder('icones-logos');
+                                  setShowWallpapersModal(true);
+                                }}
+                                className="px-2.5 py-1 text-[11px] font-semibold bg-sky-50 dark:bg-sky-950/60 hover:bg-sky-100 dark:hover:bg-sky-900/80 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800 rounded-lg cursor-pointer flex items-center gap-1 shadow-xs transition-colors"
+                                title="Escolher um logotipo da biblioteca do sistema"
+                              >
+                                <Sparkles size={12} className="text-sky-600 dark:text-sky-400" />
+                                <span>Galeria de Logos</span>
+                              </button>
                               <label className="px-2.5 py-1 text-[11px] font-semibold bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg cursor-pointer flex items-center gap-1 shadow-xs transition-colors">
                                 <Upload size={12} />
                                 <span>Carregar</span>
@@ -1608,24 +1659,35 @@ export const DigitalCardsManager: React.FC = () => {
                           </div>
 
                           <div className="flex items-center gap-2.5">
-                            {editingCard.companyLogoUrl ? (
-                              <img
-                                src={editingCard.companyLogoUrl}
-                                alt="Logo Preview"
-                                referrerPolicy="no-referrer"
-                                className="w-10 h-10 rounded-xl object-contain bg-white border border-slate-200 shadow-xs shrink-0 p-0.5"
-                              />
-                            ) : (
-                              <div className="w-10 h-10 rounded-xl bg-slate-200 text-slate-400 flex items-center justify-center shrink-0">
+                            <div className="relative shrink-0 flex items-center justify-center">
+                              {editingCard.companyLogoUrl ? (
+                                <img
+                                  src={editingCard.companyLogoUrl}
+                                  alt="Logo Preview"
+                                  referrerPolicy="no-referrer"
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = 'none';
+                                    const fallback = e.currentTarget.parentElement?.querySelector('.logo-placeholder-fallback');
+                                    if (fallback) (fallback as HTMLElement).style.display = 'flex';
+                                  }}
+                                  className="w-10 h-10 rounded-xl object-contain bg-white border border-slate-200 dark:border-slate-700 shadow-xs shrink-0 p-0.5"
+                                />
+                              ) : null}
+                              <div
+                                className={`w-10 h-10 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-500 items-center justify-center shrink-0 border border-slate-200 dark:border-slate-700 logo-placeholder-fallback ${
+                                  editingCard.companyLogoUrl ? 'hidden' : 'flex'
+                                }`}
+                                title="Nenhum logo selecionado"
+                              >
                                 <ImageIcon size={18} />
                               </div>
-                            )}
+                            </div>
                             <input
                               type="url"
                               value={editingCard.companyLogoUrl || ''}
                               onChange={(e) => setEditingCard({ ...editingCard, companyLogoUrl: e.target.value })}
                               placeholder="URL da logo da empresa (https://...)"
-                              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white"
+                              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder:text-slate-400"
                             />
                           </div>
 
@@ -1708,18 +1770,32 @@ export const DigitalCardsManager: React.FC = () => {
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             {/* 1. Ícone no Celular */}
                             <div className="p-3 bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700 rounded-2xl flex items-center gap-3 shadow-xs">
-                              <div className="relative">
-                                <img
-                                  src={
-                                    editingCard.mobileIconUrl ||
-                                    editingCard.companyLogoUrl ||
-                                    editingCard.imageUrl ||
-                                    '/icon-192.png'
-                                  }
-                                  alt="Ícone de Instalação"
-                                  referrerPolicy="no-referrer"
-                                  className="w-12 h-12 rounded-2xl object-cover border border-slate-200 dark:border-slate-700 shadow-md bg-white p-0.5 shrink-0"
-                                />
+                              <div className="relative shrink-0 flex items-center justify-center">
+                                {(editingCard.mobileIconUrl || editingCard.companyLogoUrl || editingCard.imageUrl) ? (
+                                  <img
+                                    src={
+                                      editingCard.mobileIconUrl ||
+                                      editingCard.companyLogoUrl ||
+                                      editingCard.imageUrl
+                                    }
+                                    alt="Ícone de Instalação"
+                                    referrerPolicy="no-referrer"
+                                    onError={(e) => {
+                                      e.currentTarget.style.display = 'none';
+                                      const fallback = e.currentTarget.parentElement?.querySelector('.icon-placeholder-fallback');
+                                      if (fallback) (fallback as HTMLElement).style.display = 'flex';
+                                    }}
+                                    className="w-12 h-12 rounded-2xl object-cover border border-slate-200 dark:border-slate-700 shadow-md bg-white dark:bg-slate-900 p-0.5 shrink-0"
+                                  />
+                                ) : null}
+                                <div
+                                  className={`w-12 h-12 rounded-2xl bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-500 items-center justify-center shrink-0 border border-slate-300/80 dark:border-slate-700 shadow-xs icon-placeholder-fallback ${
+                                    (editingCard.mobileIconUrl || editingCard.companyLogoUrl || editingCard.imageUrl) ? 'hidden' : 'flex'
+                                  }`}
+                                  title="Ícone padrão do sistema"
+                                >
+                                  <Smartphone size={22} />
+                                </div>
                                 {editingCard.mobileIconUrl && (
                                   <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-sky-500 rounded-full border-2 border-white dark:border-slate-900" />
                                 )}
@@ -1736,7 +1812,13 @@ export const DigitalCardsManager: React.FC = () => {
                                       : editingCard.name || 'Cartão Digital')}
                                 </p>
                                 <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
-                                  {editingCard.mobileIconUrl ? 'Ícone personalizado' : 'Herdando Logo'}
+                                  {editingCard.mobileIconUrl
+                                    ? 'Ícone personalizado'
+                                    : editingCard.companyLogoUrl
+                                    ? 'Herdando Logo da Empresa'
+                                    : editingCard.imageUrl
+                                    ? 'Herdando Foto'
+                                    : 'Padrão do Sistema (Smartphone)'}
                                 </p>
                               </div>
                             </div>
@@ -1749,22 +1831,43 @@ export const DigitalCardsManager: React.FC = () => {
                                   Favicon na Aba
                                 </span>
                                 <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400">
-                                  {editingCard.mobileIconUrl ? 'Via Ícone Carregado' : (editingCard.companyLogoUrl ? 'Via Logo Empresa' : 'Padrão')}
+                                  {editingCard.mobileIconUrl
+                                    ? 'Via Ícone Carregado'
+                                    : (editingCard.companyLogoUrl
+                                      ? 'Via Logo Empresa'
+                                      : (editingCard.imageUrl
+                                        ? 'Via Foto'
+                                        : 'Padrão (Globo)'))}
                                 </span>
                               </div>
                               {/* Mockup da Aba do Navegador */}
                               <div className="flex items-center gap-2 px-2.5 py-1.5 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
-                                <img
-                                  src={
-                                    editingCard.mobileIconUrl ||
-                                    editingCard.companyLogoUrl ||
-                                    editingCard.imageUrl ||
-                                    '/icon-192.png'
-                                  }
-                                  alt="Favicon"
-                                  referrerPolicy="no-referrer"
-                                  className="w-4 h-4 rounded-xs object-contain bg-white shrink-0 border border-slate-200/60"
-                                />
+                                <div className="relative shrink-0 flex items-center justify-center">
+                                  {(editingCard.mobileIconUrl || editingCard.companyLogoUrl || editingCard.imageUrl) ? (
+                                    <img
+                                      src={
+                                        editingCard.mobileIconUrl ||
+                                        editingCard.companyLogoUrl ||
+                                        editingCard.imageUrl
+                                      }
+                                      alt="Favicon"
+                                      referrerPolicy="no-referrer"
+                                      onError={(e) => {
+                                        e.currentTarget.style.display = 'none';
+                                        const fallback = e.currentTarget.parentElement?.querySelector('.favicon-placeholder-fallback');
+                                        if (fallback) (fallback as HTMLElement).style.display = 'flex';
+                                      }}
+                                      className="w-4 h-4 rounded-xs object-contain bg-white shrink-0 border border-slate-200/60"
+                                    />
+                                  ) : null}
+                                  <div
+                                    className={`w-4 h-4 rounded-xs bg-slate-300 dark:bg-slate-700 text-slate-500 dark:text-slate-400 items-center justify-center shrink-0 favicon-placeholder-fallback ${
+                                      (editingCard.mobileIconUrl || editingCard.companyLogoUrl || editingCard.imageUrl) ? 'hidden' : 'flex'
+                                    }`}
+                                  >
+                                    <Globe size={10} />
+                                  </div>
+                                </div>
                                 <span className="text-[11px] font-medium text-slate-700 dark:text-slate-200 truncate flex-1">
                                   {editingCard.mobileAppName ||
                                     (editingCard.brandName
@@ -1784,6 +1887,20 @@ export const DigitalCardsManager: React.FC = () => {
                               </label>
 
                               <div className="flex flex-wrap items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setLibraryTargetField('mobileIcon');
+                                    setLibraryInitialFolder('icones-logos');
+                                    setShowWallpapersModal(true);
+                                  }}
+                                  className="px-2.5 py-1 text-[11px] font-semibold bg-sky-50 dark:bg-sky-950/60 hover:bg-sky-100 dark:hover:bg-sky-900/80 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800 rounded-lg cursor-pointer flex items-center gap-1 shadow-xs transition-colors"
+                                  title="Escolher um ícone/favicon padrão da biblioteca do sistema"
+                                >
+                                  <Sparkles size={12} className="text-sky-600 dark:text-sky-400" />
+                                  <span>Galeria de Ícones & Favicon</span>
+                                </button>
+
                                 <label className="px-2.5 py-1 text-[11px] font-semibold bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-lg cursor-pointer flex items-center gap-1 shadow-xs transition-colors">
                                   <Upload size={12} />
                                   <span>Carregar Nova Imagem</span>
@@ -1818,17 +1935,42 @@ export const DigitalCardsManager: React.FC = () => {
                               </div>
                             </div>
 
-                            <input
-                              type="url"
-                              value={editingCard.mobileIconUrl || ''}
-                              onChange={(e) => setEditingCard({ ...editingCard, mobileIconUrl: e.target.value })}
-                              placeholder={
-                                editingCard.companyLogoUrl
-                                  ? `Padrão: ${editingCard.companyLogoUrl}`
-                                  : 'URL da imagem do ícone (https://...)'
-                              }
-                              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder:text-slate-400"
-                            />
+                            <div className="flex items-center gap-2.5">
+                              <div className="relative shrink-0 flex items-center justify-center">
+                                {editingCard.mobileIconUrl ? (
+                                  <img
+                                    src={editingCard.mobileIconUrl}
+                                    alt="Ícone Preview"
+                                    referrerPolicy="no-referrer"
+                                    onError={(e) => {
+                                      e.currentTarget.style.display = 'none';
+                                      const fallback = e.currentTarget.parentElement?.querySelector('.mobile-icon-input-fallback');
+                                      if (fallback) (fallback as HTMLElement).style.display = 'flex';
+                                    }}
+                                    className="w-10 h-10 rounded-xl object-contain bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-xs shrink-0 p-0.5"
+                                  />
+                                ) : null}
+                                <div
+                                  className={`w-10 h-10 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-500 items-center justify-center shrink-0 border border-slate-200 dark:border-slate-700 mobile-icon-input-fallback ${
+                                    editingCard.mobileIconUrl ? 'hidden' : 'flex'
+                                  }`}
+                                  title="Nenhum ícone customizado (herdando logo da empresa ou padrão)"
+                                >
+                                  <Smartphone size={18} />
+                                </div>
+                              </div>
+                              <input
+                                type="url"
+                                value={editingCard.mobileIconUrl || ''}
+                                onChange={(e) => setEditingCard({ ...editingCard, mobileIconUrl: e.target.value })}
+                                placeholder={
+                                  editingCard.companyLogoUrl
+                                    ? `Padrão: Herdando Logo da Empresa (${editingCard.companyLogoUrl})`
+                                    : 'URL da imagem do ícone (https://...)'
+                                }
+                                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder:text-slate-400"
+                              />
+                            </div>
                             <p className="text-[11px] text-slate-500 dark:text-slate-400">
                               O <strong>Logo da Empresa</strong> serve como favicon padrão do cartão gerado e ícone de instalação. Ao carregar uma imagem acima, você modifica tanto o ícone de instalação no celular quanto o favicon da aba do navegador.
                             </p>
@@ -2363,50 +2505,127 @@ export const DigitalCardsManager: React.FC = () => {
                           </div>
                         </div>
 
-                        {/* 4. Imagem de Fundo por trás do Cartão (Via Link ou Upload do Dispositivo) */}
+                        {/* 4. Imagem de Fundo por trás do Cartão (Via Galeria, Link ou Upload) */}
                         <div className="pt-2 border-t border-slate-100 space-y-3">
-                          <div className="flex items-center justify-between">
-                            <label className="block text-[11px] font-bold text-slate-700">
-                              Imagem de Fundo por trás do Cartão
-                            </label>
-                            {editingCard.contentBackgroundImageUrl && (
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div>
+                              <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-200">
+                                Imagem de Fundo por trás do Cartão
+                              </label>
+                              <p className="text-[10px] text-slate-500">
+                                Teste modelos pré-definidos da biblioteca ou use sua própria imagem
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
                               <button
                                 type="button"
-                                onClick={() =>
-                                  setEditingCard({
-                                    ...editingCard,
-                                    contentBackgroundImageUrl: '',
-                                    appearanceTheme: 'personalizado',
-                                  })
-                                }
-                                className="text-[11px] font-bold text-rose-600 hover:text-rose-700 flex items-center gap-1 cursor-pointer"
+                                onClick={() => {
+                                  setLibraryTargetField('wallpaper');
+                                  setLibraryInitialFolder('all');
+                                  setShowWallpapersModal(true);
+                                }}
+                                className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
                               >
-                                <X size={12} />
-                                <span>Remover Imagem</span>
+                                <Layers size={13} />
+                                <span>🖼️ Galeria de Fundos</span>
                               </button>
-                            )}
+                              {editingCard.contentBackgroundImageUrl && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setEditingCard({
+                                      ...editingCard,
+                                      contentBackgroundImageUrl: '',
+                                      appearanceTheme: 'personalizado',
+                                    })
+                                  }
+                                  className="text-[11px] font-bold text-rose-600 hover:text-rose-700 flex items-center gap-1 cursor-pointer"
+                                >
+                                  <X size={12} />
+                                  <span>Remover</span>
+                                </button>
+                              )}
+                            </div>
                           </div>
+
+                          {/* Miniatura do Fundo Selecionado com Acesso Rápido */}
+                          {editingCard.contentBackgroundImageUrl && (
+                            <div className="p-2.5 rounded-xl bg-sky-50/70 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800 flex items-center justify-between gap-3">
+                              <div className="flex items-center gap-2.5 overflow-hidden">
+                                <img
+                                  src={editingCard.contentBackgroundImageUrl}
+                                  alt="Fundo Ativo"
+                                  referrerPolicy="no-referrer"
+                                  className="w-12 h-12 rounded-lg object-cover border border-sky-300 shadow-xs shrink-0"
+                                />
+                                <div className="truncate">
+                                  <span className="text-[10px] uppercase font-bold text-sky-700 dark:text-sky-300 block">
+                                    Fundo Ativo no Cartão
+                                  </span>
+                                  <span className="text-xs font-medium text-slate-700 dark:text-slate-200 truncate block">
+                                    {editingCard.contentBackgroundImageUrl.startsWith('/wallpapers/')
+                                      ? 'Papel de parede da biblioteca do sistema'
+                                      : editingCard.contentBackgroundImageUrl.startsWith('data:')
+                                      ? 'Imagem personalizada carregada do seu dispositivo'
+                                      : 'Imagem via link externo'}
+                                  </span>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setShowWallpapersModal(true)}
+                                className="px-2.5 py-1 text-[11px] font-bold text-sky-700 dark:text-sky-300 hover:underline shrink-0"
+                              >
+                                Trocar Fundo
+                              </button>
+                            </div>
+                          )}
 
                           {/* Controles de Entrada (Link ou Upload) */}
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                             <div>
-                              <label className="block text-[10px] font-bold text-slate-500 mb-1 flex items-center gap-1">
+                              <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1 flex items-center gap-1">
                                 <LinkIcon size={12} />
-                                <span>Incluir via Link (URL da Imagem)</span>
+                                <span>Incluir via Link (URL da Imagem / ImgBB)</span>
                               </label>
-                              <input
-                                type="url"
-                                placeholder="https://exemplo.com/fundo.jpg"
-                                value={editingCard.contentBackgroundImageUrl || ''}
-                                onChange={(e) =>
-                                  setEditingCard({
-                                    ...editingCard,
-                                    contentBackgroundImageUrl: e.target.value,
-                                    appearanceTheme: 'personalizado',
-                                  })
-                                }
-                                className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
-                              />
+                              <div className="flex items-center gap-2">
+                                <div className="relative shrink-0 flex items-center justify-center">
+                                  {editingCard.contentBackgroundImageUrl ? (
+                                    <img
+                                      src={editingCard.contentBackgroundImageUrl}
+                                      alt="Fundo"
+                                      referrerPolicy="no-referrer"
+                                      onError={(e) => {
+                                        e.currentTarget.style.display = 'none';
+                                        const fallback = e.currentTarget.parentElement?.querySelector('.bg-placeholder-fallback');
+                                        if (fallback) (fallback as HTMLElement).style.display = 'flex';
+                                      }}
+                                      className="w-8 h-8 rounded-lg object-cover border border-slate-300 dark:border-slate-700 shadow-xs shrink-0"
+                                    />
+                                  ) : null}
+                                  <div
+                                    className={`w-8 h-8 rounded-lg bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-500 items-center justify-center shrink-0 border border-slate-200 dark:border-slate-700 bg-placeholder-fallback ${
+                                      editingCard.contentBackgroundImageUrl ? 'hidden' : 'flex'
+                                    }`}
+                                    title="Nenhum fundo via link selecionado"
+                                  >
+                                    <ImageIcon size={14} />
+                                  </div>
+                                </div>
+                                <input
+                                  type="url"
+                                  placeholder="https://exemplo.com/fundo.jpg"
+                                  value={editingCard.contentBackgroundImageUrl || ''}
+                                  onChange={(e) =>
+                                    setEditingCard({
+                                      ...editingCard,
+                                      contentBackgroundImageUrl: e.target.value,
+                                      appearanceTheme: 'personalizado',
+                                    })
+                                  }
+                                  className="w-full px-2.5 py-1.5 text-xs border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder:text-slate-400"
+                                />
+                              </div>
                             </div>
 
                             <div>
@@ -3700,8 +3919,17 @@ export const DigitalCardsManager: React.FC = () => {
                                       <img
                                         src={editingCard.companyLogoUrl}
                                         alt="Logo da empresa"
+                                        referrerPolicy="no-referrer"
+                                        onError={(e) => {
+                                          e.currentTarget.style.display = 'none';
+                                          const fallback = e.currentTarget.parentElement?.querySelector('.qr-auto-logo-fallback');
+                                          if (fallback) (fallback as HTMLElement).style.display = 'flex';
+                                        }}
                                         className="w-10 h-10 object-contain rounded bg-white p-1 border shadow-xs"
                                       />
+                                      <div className="w-10 h-10 rounded bg-slate-200 text-slate-400 items-center justify-center p-1 border shadow-xs qr-auto-logo-fallback hidden">
+                                        <ImageIcon size={18} />
+                                      </div>
                                       <div>
                                         <span className="text-xs font-bold text-emerald-700 block">✓ Logo da Empresa Ativo</span>
                                         <span className="text-[10px] text-slate-500">Este logo cadastrado na seção 2 é inserido automaticamente no centro do QR Code.</span>
@@ -3718,13 +3946,38 @@ export const DigitalCardsManager: React.FC = () => {
                                   <label className="block text-[11px] font-bold text-slate-700 mb-1">
                                     Sobrescrever com Logo Específico do QR Code (Opcional)
                                   </label>
-                                  <input
-                                    type="url"
-                                    value={editingCard.qrCodeLogoUrl || ''}
-                                    onChange={(e) => setEditingCard({ ...editingCard, qrCodeLogoUrl: e.target.value })}
-                                    placeholder="https://exemplo.com/logo-icone.png (deixe vazio para usar o logo da empresa)"
-                                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white"
-                                  />
+                                  <div className="flex items-center gap-2.5">
+                                    <div className="relative shrink-0 flex items-center justify-center">
+                                      {editingCard.qrCodeLogoUrl ? (
+                                        <img
+                                          src={editingCard.qrCodeLogoUrl}
+                                          alt="QR Logo"
+                                          referrerPolicy="no-referrer"
+                                          onError={(e) => {
+                                            e.currentTarget.style.display = 'none';
+                                            const fallback = e.currentTarget.parentElement?.querySelector('.qr-logo-placeholder-fallback');
+                                            if (fallback) (fallback as HTMLElement).style.display = 'flex';
+                                          }}
+                                          className="w-10 h-10 rounded-xl object-contain bg-white border border-slate-200 dark:border-slate-700 shadow-xs shrink-0 p-0.5"
+                                        />
+                                      ) : null}
+                                      <div
+                                        className={`w-10 h-10 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-500 items-center justify-center shrink-0 border border-slate-200 dark:border-slate-700 qr-logo-placeholder-fallback ${
+                                          editingCard.qrCodeLogoUrl ? 'hidden' : 'flex'
+                                        }`}
+                                        title="Nenhum logo específico para QR Code"
+                                      >
+                                        <QrCode size={18} />
+                                      </div>
+                                    </div>
+                                    <input
+                                      type="url"
+                                      value={editingCard.qrCodeLogoUrl || ''}
+                                      onChange={(e) => setEditingCard({ ...editingCard, qrCodeLogoUrl: e.target.value })}
+                                      placeholder="https://exemplo.com/logo-icone.png (deixe vazio para usar o logo da empresa)"
+                                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder:text-slate-400"
+                                    />
+                                  </div>
                                 </div>
 
                                 {/* Tamanho do Logo */}
@@ -4761,6 +5014,56 @@ export const DigitalCardsManager: React.FC = () => {
           isOpen={helpModalOpen}
           onClose={() => setHelpModalOpen(false)}
           initialArticleId={helpArticleId}
+        />
+
+        {/* Modal da Biblioteca de Papéis de Parede e Fundos / Galeria Centralizada */}
+        <WallpapersLibraryModal
+          isOpen={showWallpapersModal}
+          onClose={() => setShowWallpapersModal(false)}
+          targetFieldMode={libraryTargetField}
+          initialFolderId={libraryInitialFolder}
+          currentWallpaperUrl={
+            libraryTargetField === 'foto'
+              ? editingCard?.imageUrl || ''
+              : libraryTargetField === 'logo'
+              ? editingCard?.companyLogoUrl || ''
+              : libraryTargetField === 'mobileIcon'
+              ? editingCard?.mobileIconUrl || ''
+              : editingCard?.contentBackgroundImageUrl || ''
+          }
+          isMaster={isMaster}
+          onSelectWallpaper={(selectedUrl) => {
+            if (!editingCard) return;
+
+            if (libraryTargetField === 'foto') {
+              setEditingCard({
+                ...editingCard,
+                imageUrl: selectedUrl,
+              });
+            } else if (libraryTargetField === 'logo') {
+              setEditingCard({
+                ...editingCard,
+                companyLogoUrl: selectedUrl,
+              });
+            } else if (libraryTargetField === 'mobileIcon') {
+              setEditingCard({
+                ...editingCard,
+                mobileIconUrl: selectedUrl,
+              });
+            } else {
+              // Fundo / Wallpaper
+              setEditingCard({
+                ...editingCard,
+                contentBackgroundImageUrl: selectedUrl,
+                contentBackgroundImageFocusX: editingCard.contentBackgroundImageFocusX ?? 50,
+                contentBackgroundImageFocusY: editingCard.contentBackgroundImageFocusY ?? 50,
+                // Reduz sutilmente a opacidade do fundo caso esteja 100% para revelar o wallpaper
+                contentOpacity: editingCard.contentOpacity === 100 ? 92 : editingCard.contentOpacity,
+                headerOpacity: editingCard.headerOpacity === 100 ? 95 : editingCard.headerOpacity,
+                appearanceTheme: 'personalizado',
+              });
+            }
+          }}
         />
       </div>
     </div>

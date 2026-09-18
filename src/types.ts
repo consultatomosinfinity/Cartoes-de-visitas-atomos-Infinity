@@ -240,3 +240,21 @@ export interface CardMetrics {
   destinations: Record<string, number>;
   inquiriesCount: number;
 }
+
+export interface WallpaperItem {
+  id: string;
+  title: string;
+  url: string;
+  thumbnailUrl?: string;
+  folderId: string;
+  recommendedTheme?: string;
+  createdAt?: string;
+}
+
+export interface WallpaperFolder {
+  id: string;
+  name: string;
+  description?: string;
+  icon?: string;
+  order?: number;
+}

@@ -393,7 +393,7 @@ export const DigitalCardLivePreview: React.FC<DigitalCardLivePreviewProps> = ({ 
           {/* SIMULAÇÃO DE ABA DO NAVEGADOR MOBILE (com Favicon Dinâmico do Cartão) */}
           <div className="mx-1 mb-1.5 px-2.5 py-1 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xs rounded-xl border border-slate-200/80 dark:border-slate-800/80 flex items-center gap-2 shadow-xs">
             <img
-              src={card.mobileIconUrl || card.companyLogoUrl || card.imageUrl || '/icon-192.png'}
+              src={card.mobileIconUrl || card.companyLogoUrl || card.imageUrl || '/default-cat-avatar.jpg'}
               alt="Favicon"
               referrerPolicy="no-referrer"
               className="w-3.5 h-3.5 rounded-xs object-contain shrink-0 bg-white border border-slate-200/60"
