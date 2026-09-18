@@ -1306,7 +1306,13 @@ Qualquer ajuste de dados, telefones ou ativação de novos recursos é só falar
                         type="button"
                         onClick={() => {
                           const msg = `Olá ${deliveryUser.fullName || ''}! 👋\n\nSeu Cartão Digital Interativo Átomos Infinity já está configurado e pronto para uso no Modo Degustação!\n\n🔗 Acesse sua página com o link e QR Code para divulgação:\n${window.location.origin}/degustador/${deliveryCard.slug}\n\n📲 Ou acesse diretamente seu cartão:\n${window.location.origin}/cartao/${deliveryCard.slug}\n\nQualquer ajuste de dados, telefones ou ativação de novos recursos é só falar com a gente!`;
-                          const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
+                          let rawPhone = (deliveryUser.phone || deliveryCard.whatsappPhone || deliveryCard.phone || '').replace(/\D/g, '');
+                          if (rawPhone && !rawPhone.startsWith('55') && (rawPhone.length === 10 || rawPhone.length === 11)) {
+                            rawPhone = `55${rawPhone}`;
+                          }
+                          const url = rawPhone
+                            ? `https://wa.me/${rawPhone}?text=${encodeURIComponent(msg)}`
+                            : `https://wa.me/?text=${encodeURIComponent(msg)}`;
                           window.open(url, '_blank');
                         }}
                         className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-2 shadow-md transition cursor-pointer"

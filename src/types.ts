@@ -210,6 +210,28 @@ export interface DigitalCard {
   createdById?: number;
   createdAt: string;
   updatedAt: string;
+
+  // Gestão de Mensalidade, Recorrência e Vencimento (Billing & Expiry)
+  billingCycle?: CardBillingCycle;
+  billingAmount?: number;
+  billingStartDate?: string;
+  billingDueDate?: string;
+  billingPixKey?: string;
+  billingCustomerName?: string;
+  billingCustomerPhone?: string;
+  billingNotes?: string;
+  billingLastRenewedAt?: string;
+}
+
+export type CardBillingCycle = 'mensal' | 'trimestral' | 'semestral' | 'anual' | 'degustacao' | 'vitalicio';
+
+export interface CardBillingSummary {
+  totalCards: number;
+  activeCards: number;
+  expiringSoonCards: number; // Próximos 7 dias
+  expiredCards: number;
+  monthlyRevenueEstimate: number;
+  quarterlyRevenueEstimate: number;
 }
 
 export interface DigitalCardEvent {
@@ -258,3 +280,63 @@ export interface WallpaperFolder {
   icon?: string;
   order?: number;
 }
+
+// Formulário Simplificado de Captação para Vendedoras & Clientes (Onboarding Express)
+export type OnboardingFormStatus = 'pendente' | 'em_producao' | 'convertido' | 'arquivado';
+
+export interface ClientOnboardingForm {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  status: OnboardingFormStatus;
+  
+  // Vendedora / Consultora / Origem
+  salesRepName?: string;
+  salesRepPhone?: string;
+
+  // Dados Pessoais & Profissionais
+  fullName: string;
+  jobTitle: string;
+  companyName: string;
+  whatsappPhone: string;
+  secondaryPhone?: string;
+  email: string;
+  
+  // Localização
+  city?: string;
+  state?: string;
+  fullAddress?: string;
+
+  // Sobre & Resumo
+  summaryBio?: string;
+
+  // Imagens (Base64 ou URLs)
+  photoUrl?: string; // Foto de perfil / Avatar
+  logoUrl?: string;  // Logo da empresa
+  contentBackgroundUrl?: string; // Papel de parede ou fundo
+
+  // Redes Sociais & Links
+  instagramHandle?: string;
+  websiteUrl?: string;
+  linkedinUrl?: string;
+  facebookUrl?: string;
+  youtubeUrl?: string;
+  tiktokUrl?: string;
+  customLinkName?: string; // Ex: "Catálogo", "Agendamento", "Cardápio"
+  customLinkUrl?: string;
+
+  // Dados Financeiros / PIX
+  pixKey?: string;
+  pixType?: 'cpf' | 'cnpj' | 'email' | 'telefone' | 'aleatoria';
+  pixBeneficiary?: string;
+
+  // Preferências Visuais & Estilo
+  preferredTheme?: string;
+  notes?: string;
+
+  // Cartão gerado a partir do formulário
+  generatedCardId?: number;
+  generatedCardSlug?: string;
+  convertedAt?: string;
+}
+

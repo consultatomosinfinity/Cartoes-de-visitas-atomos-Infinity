@@ -204,6 +204,9 @@ export const LandingPage: React.FC = () => {
             <a href="#faq" className="hover:text-sky-600 dark:hover:text-sky-400 transition-colors">
               Dúvidas
             </a>
+            <a href="/entrega" className="text-emerald-600 dark:text-emerald-400 font-bold hover:underline transition-colors flex items-center gap-1">
+              <span>Kit de Entrega</span>
+            </a>
             <a href="/ajuda" className="text-sky-600 dark:text-sky-400 font-bold hover:underline transition-colors flex items-center gap-1">
               <span>Ajuda & Docs</span>
             </a>
@@ -278,6 +281,13 @@ export const LandingPage: React.FC = () => {
               className="block py-2 text-sm font-bold text-slate-700 dark:text-slate-200"
             >
               Dúvidas
+            </a>
+            <a
+              href="/entrega"
+              onClick={() => setMobileMenuOpen(false)}
+              className="block py-2 text-sm font-bold text-emerald-600 dark:text-emerald-400"
+            >
+              Kit de Entrega (1-Clique WhatsApp)
             </a>
             <a
               href="/ajuda"

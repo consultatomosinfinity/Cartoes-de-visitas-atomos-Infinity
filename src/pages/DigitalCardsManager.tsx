@@ -41,6 +41,8 @@ import {
   Camera,
   Check,
   Download,
+  Copy,
+  FolderSync,
   Home,
   LogOut,
   Crown,
@@ -49,25 +51,32 @@ import {
   UserPlus,
   BookOpen,
   HelpCircle,
+  Calendar,
+  DollarSign,
+  BellRing,
+  FileText,
 } from 'lucide-react';
 import { DigitalCard, CardMetrics, DigitalCardInquiry } from '../types.ts';
 import { PRESET_THEMES } from '../../shared/digital-card-appearance.ts';
 import { getAiAgentButtonGlowClass, getAiAgentButtonPaddingY, AiAgentGlowIntensity, AiAgentButtonSize } from '../../shared/digital-card-ai-agent.ts';
 import { DigitalCardLivePreview } from '../components/DigitalCardLivePreview.tsx';
+import { CardBillingAlertsManager } from '../components/CardBillingAlertsManager.tsx';
 import { ThemeToggle } from '../components/ThemeToggle.tsx';
 import { useAuth } from '../contexts/AuthContext.tsx';
 import { initSupabase, uploadCardAsset, mapDbToDigitalCard, mapDigitalCardToDb } from '../lib/supabase.ts';
 import { AdminUsersManager } from '../components/AdminUsersManager.tsx';
 import { WallpapersLibraryModal } from '../components/WallpapersLibraryModal.tsx';
 import { HelpCenterModal } from '../components/HelpCenterModal.tsx';
+import { ClientOnboardingFormsManager } from '../components/ClientOnboardingFormsManager.tsx';
 
 export const DigitalCardsManager: React.FC = () => {
   const { user, signOut, isConfigured, isMaster, isAdminOrMaster, role, plan } = useAuth();
-  const [mainView, setMainView] = useState<'cards' | 'users'>('cards');
+  const [mainView, setMainView] = useState<'cards' | 'users' | 'billing' | 'onboarding_forms'>('cards');
   const [cardUserFilter, setCardUserFilter] = useState<string | null>(null);
   const [cardUserFilterEmail, setCardUserFilterEmail] = useState<string | null>(null);
   const [cards, setCards] = useState<DigitalCard[]>([]);
   const [loading, setLoading] = useState(true);
+  const [pendingFormsCount, setPendingFormsCount] = useState<number>(0);
   const [editingCard, setEditingCard] = useState<Partial<DigitalCard> | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [isEditingLandingTemplate, setIsEditingLandingTemplate] = useState(false);
@@ -89,6 +98,38 @@ export const DigitalCardsManager: React.FC = () => {
       handleStartEditLandingTemplate();
     }
   }, []);
+
+  // Busca quantidade de formulários de clientes pendentes
+  useEffect(() => {
+    const fetchPendingForms = async () => {
+      try {
+        const res = await fetch('/api/onboarding-forms');
+        if (res.ok) {
+          const list = await res.json();
+          const pending = list.filter((f: any) => f.status === 'pendente').length;
+          setPendingFormsCount(pending);
+        }
+      } catch (e) {}
+    };
+    fetchPendingForms();
+    const interval = setInterval(fetchPendingForms, 30000);
+    return () => clearInterval(interval);
+  }, [mainView]);
+
+  const handleCardCreatedFromForm = (newCard: DigitalCard) => {
+    setCards((prev) => [newCard, ...prev.filter((c) => c.id !== newCard.id)]);
+    setEditingCard(newCard);
+    setIsNew(false);
+    setIsEditingLandingTemplate(false);
+    setActiveTab('editor');
+    setMainView('cards');
+    setSaveSuccess(true);
+    setLandingTemplateSuccessMessage(`Cartão de ${newCard.name} gerado a partir do formulário com sucesso!`);
+    setTimeout(() => {
+      setSaveSuccess(false);
+      setLandingTemplateSuccessMessage(null);
+    }, 5000);
+  };
 
   const handleStartEditLandingTemplate = async () => {
     try {
@@ -865,6 +906,31 @@ export const DigitalCardsManager: React.FC = () => {
     }
   };
 
+  const handleDuplicateCard = async (cardId: number) => {
+    try {
+      setLoading(true);
+      const res = await fetch(`/api/cards/${cardId}/duplicate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Erro ao duplicar cartão.');
+      }
+      const cloned = await res.json();
+      await fetchCards();
+      setEditingCard(cloned);
+      setIsNew(false);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 4000);
+    } catch (err: any) {
+      alert(err.message || 'Erro ao clonar cartão.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-100 transition-colors">
       {/* Top Navbar */}
@@ -958,10 +1024,65 @@ export const DigitalCardsManager: React.FC = () => {
                   Master
                 </span>
               </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsEditingLandingTemplate(false);
+                  setMainView('billing');
+                }}
+                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  mainView === 'billing'
+                    ? 'bg-gradient-to-r from-amber-600 to-amber-500 text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+                title="Alertas de Vencimento, Planos de 3 Meses e Cobrança WhatsApp (1-Clique)"
+              >
+                <Calendar size={14} />
+                <span>Vencimentos & Cobrança</span>
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-900 dark:bg-amber-900 dark:text-amber-100 font-extrabold">
+                  3 Meses
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsEditingLandingTemplate(false);
+                  setMainView('onboarding_forms');
+                }}
+                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  mainView === 'onboarding_forms'
+                    ? 'bg-gradient-to-r from-sky-600 via-indigo-600 to-purple-600 text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+                title="Formulários de Captação Simplificados preenchidos por Clientes e Vendedoras"
+              >
+                <FileText size={14} className={mainView === 'onboarding_forms' ? 'text-amber-300' : 'text-sky-600 dark:text-sky-400'} />
+                <span>Formulários Clientes</span>
+                {pendingFormsCount > 0 ? (
+                  <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-amber-400 text-slate-900 font-black animate-pulse">
+                    {pendingFormsCount} novos
+                  </span>
+                ) : (
+                  <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-sky-100 text-sky-900 dark:bg-sky-900 dark:text-sky-100 font-extrabold">
+                    Coleta
+                  </span>
+                )}
+              </button>
             </div>
           )}
 
           <div className="flex items-center gap-2 shrink-0">
+            <a
+              href={editingCard?.slug ? `/entrega/${editingCard.slug}` : '/entrega'}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/80 text-emerald-700 dark:text-emerald-300 transition-colors shadow-xs"
+              title="Abrir Kit de Entrega com 1 Clique (WhatsApp) e Coleta Rápida"
+            >
+              <Share2 size={15} className="text-emerald-600 dark:text-emerald-400" />
+              <span className="hidden sm:inline">Kit de Entrega (1-Clique)</span>
+            </a>
+
             <button
               type="button"
               onClick={() => {
@@ -1063,12 +1184,84 @@ export const DigitalCardsManager: React.FC = () => {
             <Crown size={14} />
             <span>Usuários</span>
           </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setIsEditingLandingTemplate(false);
+              setMainView('billing');
+            }}
+            className={`flex-1 min-w-[140px] flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl text-xs font-bold cursor-pointer shrink-0 ${
+              mainView === 'billing'
+                ? 'bg-gradient-to-r from-amber-600 to-amber-500 text-white shadow-xs'
+                : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+            }`}
+          >
+            <Calendar size={14} />
+            <span>Cobranças (3m)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setIsEditingLandingTemplate(false);
+              setMainView('onboarding_forms');
+            }}
+            className={`flex-1 min-w-[150px] flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl text-xs font-bold cursor-pointer shrink-0 ${
+              mainView === 'onboarding_forms'
+                ? 'bg-gradient-to-r from-sky-600 via-indigo-600 to-purple-600 text-white shadow-xs'
+                : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+            }`}
+          >
+            <FileText size={14} className={mainView === 'onboarding_forms' ? 'text-amber-300' : 'text-sky-600'} />
+            <span>Formulários</span>
+            {pendingFormsCount > 0 && (
+              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-amber-400 text-slate-900 font-black animate-pulse">
+                {pendingFormsCount}
+              </span>
+            )}
+          </button>
         </div>
       )}
 
       {/* Main Container */}
       <div className="w-full max-w-7xl 2xl:max-w-[1600px] mx-auto px-4 sm:px-6 py-6">
-        {mainView === 'users' && isAdminOrMaster ? (
+        {mainView === 'onboarding_forms' && isAdminOrMaster ? (
+          <ClientOnboardingFormsManager
+            onCardCreated={handleCardCreatedFromForm}
+            onOpenCard={(slug) => {
+              window.open(`/cartao/${slug}`, '_blank');
+            }}
+          />
+        ) : mainView === 'billing' && isAdminOrMaster ? (
+          <CardBillingAlertsManager
+            cards={cards}
+            onUpdateCard={async (updatedCard) => {
+              setCards((prev) => prev.map((c) => (c.id === updatedCard.id ? updatedCard : c)));
+              if (editingCard?.id === updatedCard.id) {
+                setEditingCard(updatedCard);
+              }
+              try {
+                if (user) {
+                  const client = await initSupabase();
+                  if (client) {
+                    const dbData = mapDigitalCardToDb(updatedCard, user.id);
+                    await client.from('digital_cards').update(dbData).eq('id', updatedCard.id);
+                  }
+                }
+                await safeApiMutate(`/api/cards/${updatedCard.id}`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(updatedCard),
+                });
+              } catch (err) {
+                console.error('Erro ao persistir atualização de cobrança:', err);
+              }
+            }}
+            masterWhatsApp="5515996259353"
+            masterPixKey="15996259353"
+          />
+        ) : mainView === 'users' && isAdminOrMaster ? (
           <AdminUsersManager
             onSelectUserCards={(userId, email) => {
               setCardUserFilter(userId);
@@ -1186,16 +1379,39 @@ export const DigitalCardsManager: React.FC = () => {
                             <span>{c.status === 'ativo' ? 'Ativo' : 'Pausado'}</span>
                           </button>
 
-                          <a
-                            href={`/cartao/${c.slug}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            onClick={(e) => handleOpenPublicPage(e, c.slug)}
-                            className="text-sky-600 hover:text-sky-700 flex items-center gap-1 font-semibold text-[11px]"
-                          >
-                            <span>Abrir</span>
-                            <ExternalLink size={12} />
-                          </a>
+                          <div className="flex items-center gap-1.5">
+                            <a
+                              href={`/entrega/${c.slug}`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-emerald-600 hover:text-emerald-700 p-1 rounded-md hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition"
+                              title="Abrir Kit de Entrega com 1 Clique WhatsApp"
+                            >
+                              <Share2 size={13} />
+                            </a>
+
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDuplicateCard(c.id);
+                              }}
+                              className="text-purple-600 hover:text-purple-700 p-1 rounded-md hover:bg-purple-50 dark:hover:bg-purple-950/40 transition"
+                              title="Duplicar / Clonar Cartão"
+                            >
+                              <FolderSync size={13} />
+                            </button>
+
+                            <a
+                              href={`/cartao/${c.slug}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              onClick={(e) => handleOpenPublicPage(e, c.slug)}
+                              className="text-sky-600 hover:text-sky-700 flex items-center gap-1 font-semibold text-[11px]"
+                            >
+                              <span>Abrir</span>
+                              <ExternalLink size={12} />
+                            </a>
+                          </div>
                         </div>
                       </div>
                     );
@@ -1269,6 +1485,30 @@ export const DigitalCardsManager: React.FC = () => {
 
                 {/* Botões de Ação de Barra Superior */}
                 <div className="ml-auto flex items-center gap-2 flex-wrap">
+                  {!isNew && editingCard?.slug && (
+                    <a
+                      href={`/entrega/${editingCard.slug}`}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border border-emerald-300 dark:border-emerald-800 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 transition-all cursor-pointer shadow-xs"
+                      title="Gerar Kit de Entrega com 1 Clique (WhatsApp) para este cliente"
+                    >
+                      <Share2 size={13} className="text-emerald-600 dark:text-emerald-400" />
+                      <span>Kit WhatsApp</span>
+                    </a>
+                  )}
+
+                  {!isNew && editingCard?.id && (
+                    <button
+                      type="button"
+                      onClick={() => handleDuplicateCard(editingCard.id!)}
+                      disabled={loading}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border border-purple-200 dark:border-purple-800 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/40 dark:hover:bg-purple-900/60 text-purple-700 dark:text-purple-300 transition-all cursor-pointer shadow-xs"
+                      title="Clonar este cartão com todas as suas configurações para um novo cliente"
+                    >
+                      <FolderSync size={13} className="text-purple-600 dark:text-purple-400" />
+                      <span>Clonar Cartão</span>
+                    </button>
+                  )}
+
                   {isMaster && !isEditingLandingTemplate && (
                     <button
                       type="button"

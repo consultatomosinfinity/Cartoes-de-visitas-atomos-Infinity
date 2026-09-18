@@ -48,12 +48,23 @@ export const WallpapersLibraryModal: React.FC<WallpapersLibraryModalProps> = ({
   // Estados para o modo de administração Master
   const [showAddModal, setShowAddModal] = useState(false);
   const [showFolderModal, setShowFolderModal] = useState(false);
-  const [addMode, setAddMode] = useState<'url' | 'upload'>('upload');
+  const [addMode, setAddMode] = useState<'upload' | 'url'>('upload');
   const [newTitle, setNewTitle] = useState('');
   const [newUrl, setNewUrl] = useState('');
   const [newFolderTarget, setNewFolderTarget] = useState('');
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
-  const [uploadBase64, setUploadBase64] = useState<string>('');
+  
+  // Fila de fotos pendentes para envio individual ou múltiplo
+  interface PendingPhoto {
+    id: string;
+    title: string;
+    file?: File;
+    fileName: string;
+    base64Data: string;
+    sizeFormatted: string;
+  }
+  const [pendingPhotos, setPendingPhotos] = useState<PendingPhoto[]>([]);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+
   const [newFolderName, setNewFolderName] = useState('');
   const [newFolderDesc, setNewFolderDesc] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -77,9 +88,6 @@ export const WallpapersLibraryModal: React.FC<WallpapersLibraryModalProps> = ({
         const data = await res.json();
         setFolders(data.folders || []);
         setItems(data.items || []);
-        if (data.folders?.length > 0 && selectedFolderId === 'all') {
-          // Mantém 'all' ou o primeiro
-        }
       }
     } catch (err) {
       console.warn('Erro ao carregar wallpapers:', err);
@@ -96,8 +104,6 @@ export const WallpapersLibraryModal: React.FC<WallpapersLibraryModalProps> = ({
       loadWallpapers();
     }
   }, [isOpen, initialFolderId]);
-
-  if (!isOpen) return null;
 
   // Título e descrição dinâmica conforme o campo de destino
   const getModalTitle = () => {
@@ -143,80 +149,232 @@ export const WallpapersLibraryModal: React.FC<WallpapersLibraryModalProps> = ({
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 8 * 1024 * 1024) {
-      showToast('error', 'A imagem selecionada deve ter no máximo 8MB.');
-      return;
-    }
-    setUploadFile(file);
-    if (!newTitle) {
+  if (!isOpen) return null;
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  };
+
+  const optimizeImageFile = async (file: File): Promise<{ base64Data: string; sizeFormatted: string }> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const rawBase64 = event.target?.result as string;
+        // Se o arquivo for SVG ou pequeno (< 800KB), mantém original
+        if (file.type === 'image/svg+xml' || file.size < 800 * 1024) {
+          resolve({
+            base64Data: rawBase64,
+            sizeFormatted: formatFileSize(file.size),
+          });
+          return;
+        }
+
+        const img = new Image();
+        img.onload = () => {
+          const maxDimension = 2048;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > maxDimension || height > maxDimension) {
+            if (width > height) {
+              height = Math.round((height * maxDimension) / width);
+              width = maxDimension;
+            } else {
+              width = Math.round((width * maxDimension) / height);
+              height = maxDimension;
+            }
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve({
+              base64Data: rawBase64,
+              sizeFormatted: formatFileSize(file.size),
+            });
+            return;
+          }
+
+          // Se for PNG transparente mantém PNG, se não usa JPEG de alta fidelidade
+          const isPng = file.type === 'image/png';
+          ctx.drawImage(img, 0, 0, width, height);
+          const mimeType = isPng ? 'image/png' : 'image/jpeg';
+          const quality = isPng ? 0.9 : 0.88;
+          const compressedDataUrl = canvas.toDataURL(mimeType, quality);
+          
+          // Calcular tamanho aproximado do base64
+          const approxBytes = Math.round((compressedDataUrl.length * 3) / 4);
+          resolve({
+            base64Data: compressedDataUrl,
+            sizeFormatted: formatFileSize(approxBytes),
+          });
+        };
+        img.onerror = () => {
+          resolve({
+            base64Data: rawBase64,
+            sizeFormatted: formatFileSize(file.size),
+          });
+        };
+        img.src = rawBase64;
+      };
+      reader.onerror = () => {
+        resolve({
+          base64Data: '',
+          sizeFormatted: '0 B',
+        });
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleFilesSelected = async (files: FileList | File[]) => {
+    const fileArray = Array.from(files).filter((f) => f.type.startsWith('image/'));
+    if (fileArray.length === 0) return;
+
+    const validFiles = fileArray.filter((f) => {
+      if (f.size > 25 * 1024 * 1024) {
+        showToast('error', `A imagem "${f.name}" tem mais de 25MB e foi ignorada.`);
+        return false;
+      }
+      return true;
+    });
+
+    for (let index = 0; index < validFiles.length; index++) {
+      const file = validFiles[index];
       const cleanName = file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
-      setNewTitle(cleanName.charAt(0).toUpperCase() + cleanName.slice(1));
+      const title = cleanName.charAt(0).toUpperCase() + cleanName.slice(1);
+      
+      const { base64Data, sizeFormatted } = await optimizeImageFile(file);
+      if (base64Data) {
+        const newPhoto: PendingPhoto = {
+          id: `pending-${Date.now()}-${index}-${Math.random().toString(36).substring(2, 6)}`,
+          title,
+          file,
+          fileName: file.name,
+          base64Data,
+          sizeFormatted,
+        };
+        setPendingPhotos((prev) => [...prev, newPhoto]);
+      }
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      setUploadBase64(reader.result as string);
-    };
-    reader.readAsDataURL(file);
+  };
+
+  const handleRemovePendingPhoto = (id: string) => {
+    setPendingPhotos((prev) => prev.filter((p) => p.id !== id));
+  };
+
+  const handleUpdatePendingTitle = (id: string, newTitle: string) => {
+    setPendingPhotos((prev) => prev.map((p) => (p.id === id ? { ...p, title: newTitle } : p)));
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      handleFilesSelected(e.target.files);
+    }
   };
 
   const handleAddItem = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTitle.trim()) {
-      showToast('error', 'Digite um título para o papel de parede.');
-      return;
-    }
 
-    if (addMode === 'url' && !newUrl.trim()) {
-      showToast('error', 'Informe o link da imagem.');
-      return;
-    }
+    const targetFolder = newFolderTarget || folders[0]?.id || 'corporativo';
 
-    if (addMode === 'upload' && !uploadBase64) {
-      showToast('error', 'Selecione um arquivo de imagem do seu computador.');
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      const targetFolder = newFolderTarget || folders[0]?.id || 'corporativo';
-      const payload: any = {
-        title: newTitle.trim(),
-        folderId: targetFolder,
-      };
-
-      if (addMode === 'upload') {
-        payload.base64Data = uploadBase64;
-        payload.fileName = uploadFile?.name || 'wallpaper.jpg';
-      } else {
-        payload.url = newUrl.trim();
+    if (addMode === 'upload') {
+      if (pendingPhotos.length === 0) {
+        showToast('error', 'Selecione pelo menos uma foto para enviar.');
+        return;
       }
 
-      const res = await fetch('/api/wallpapers/items', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+      setSubmitting(true);
+      try {
+        const batchPayload = {
+          folderId: targetFolder,
+          items: pendingPhotos.map((p) => ({
+            title: p.title.trim() || p.fileName,
+            base64Data: p.base64Data,
+            fileName: p.fileName,
+            folderId: targetFolder,
+          })),
+        };
 
-      if (!res.ok) {
-        const errJson = await res.json().catch(() => ({}));
-        throw new Error(errJson.error || 'Erro ao adicionar imagem.');
+        const res = await fetch('/api/wallpapers/items/batch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(batchPayload),
+        });
+
+        if (!res.ok) {
+          const errJson = await res.json().catch(() => ({}));
+          throw new Error(errJson.error || 'Erro ao enviar fotos.');
+        }
+
+        const data = await res.json();
+        setItems(data.items || []);
+        showToast('success', `${pendingPhotos.length} foto(s) adicionada(s) à biblioteca com sucesso!`);
+        setShowAddModal(false);
+        setPendingPhotos([]);
+        if (selectedFolderId !== 'all' && selectedFolderId !== targetFolder) {
+          setSelectedFolderId(targetFolder);
+        }
+      } catch (err: any) {
+        showToast('error', err.message || 'Erro ao salvar fotos.');
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
+    // Modo URL (Link único ou múltiplos links por linha)
+    if (addMode === 'url') {
+      const urlLines = newUrl
+        .split(/[\n,]+/)
+        .map((u) => u.trim())
+        .filter((u) => u.length > 5 && (u.startsWith('http://') || u.startsWith('https://') || u.startsWith('/')));
+
+      if (urlLines.length === 0) {
+        showToast('error', 'Informe um link válido de imagem (ou vários, um por linha).');
+        return;
       }
 
-      const data = await res.json();
-      setItems(data.items || []);
-      showToast('success', 'Imagem adicionada à biblioteca com sucesso!');
-      setShowAddModal(false);
-      setNewTitle('');
-      setNewUrl('');
-      setUploadFile(null);
-      setUploadBase64('');
-    } catch (err: any) {
-      showToast('error', err.message || 'Erro ao salvar.');
-    } finally {
-      setSubmitting(false);
+      setSubmitting(true);
+      try {
+        const batchPayload = {
+          folderId: targetFolder,
+          items: urlLines.map((url, idx) => ({
+            title: urlLines.length === 1 && newTitle.trim() ? newTitle.trim() : `Fundo Web ${Date.now()}-${idx + 1}`,
+            url,
+            folderId: targetFolder,
+          })),
+        };
+
+        const res = await fetch('/api/wallpapers/items/batch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(batchPayload),
+        });
+
+        if (!res.ok) {
+          const errJson = await res.json().catch(() => ({}));
+          throw new Error(errJson.error || 'Erro ao adicionar fotos.');
+        }
+
+        const data = await res.json();
+        setItems(data.items || []);
+        showToast('success', `${urlLines.length} foto(s) adicionada(s) à biblioteca com sucesso!`);
+        setShowAddModal(false);
+        setNewUrl('');
+        setNewTitle('');
+        if (selectedFolderId !== 'all' && selectedFolderId !== targetFolder) {
+          setSelectedFolderId(targetFolder);
+        }
+      } catch (err: any) {
+        showToast('error', err.message || 'Erro ao salvar links.');
+      } finally {
+        setSubmitting(false);
+      }
     }
   };
 
@@ -363,10 +521,10 @@ export const WallpapersLibraryModal: React.FC<WallpapersLibraryModalProps> = ({
                     setShowAddModal(true);
                   }}
                   className="px-3.5 py-1.5 text-xs font-bold rounded-xl bg-sky-600 hover:bg-sky-700 text-white shadow-sm flex items-center gap-1.5 transition-all cursor-pointer"
-                  title="Fazer upload de nova imagem para a biblioteca"
+                  title="Fazer upload de novas fotos para a biblioteca (única ou múltiplas)"
                 >
                   <Plus size={14} />
-                  <span className="hidden sm:inline">Adicionar Imagem</span>
+                  <span className="hidden sm:inline">Adicionar Fotos</span>
                 </button>
               </div>
             )}
@@ -558,13 +716,20 @@ export const WallpapersLibraryModal: React.FC<WallpapersLibraryModalProps> = ({
                         }`}
                       >
                         {/* Imagem do Fundo */}
-                        <div className="relative aspect-[4/5] bg-slate-950 overflow-hidden">
+                        <div className="relative aspect-[4/5] bg-slate-900 dark:bg-slate-950 overflow-hidden flex items-center justify-center">
                           <img
                             src={item.thumbnailUrl || item.url}
                             alt={item.title}
                             referrerPolicy="no-referrer"
                             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                             loading="lazy"
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              if (!target.dataset.fallback) {
+                                target.dataset.fallback = 'true';
+                                target.src = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80';
+                              }
+                            }}
                           />
 
                           {/* Overlay escuro em hover com botão de aplicar */}
@@ -641,48 +806,44 @@ export const WallpapersLibraryModal: React.FC<WallpapersLibraryModalProps> = ({
         </div>
       </div>
 
-      {/* MODAL: Adicionar Imagem (Master) */}
+      {/* MODAL: Adicionar Imagem / Múltiplas Fotos (Master) */}
       {showAddModal && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xl overflow-hidden">
-            <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700">
-              <div className="flex items-center gap-2">
-                <ImageIcon className="text-sky-600" size={18} />
-                <h4 className="font-bold text-sm text-slate-900 dark:text-white">
-                  Adicionar Fundo à Biblioteca
-                </h4>
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white dark:bg-slate-800 w-full max-w-2xl max-h-[90vh] rounded-3xl border border-slate-200 dark:border-slate-700 shadow-2xl overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between p-4 sm:p-5 border-b border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/60">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-sky-100 dark:bg-sky-950 text-sky-600 dark:text-sky-400 flex items-center justify-center">
+                  <ImageIcon size={20} />
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white">
+                    Adicionar Fotos à Galeria
+                  </h4>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Envie uma foto ou selecione várias fotos de uma só vez para a biblioteca.
+                  </p>
+                </div>
               </div>
               <button
-                onClick={() => setShowAddModal(false)}
-                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg"
+                onClick={() => {
+                  setShowAddModal(false);
+                  setPendingPhotos([]);
+                }}
+                className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer transition-colors"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handleAddItem} className="p-5 space-y-4">
+            <form onSubmit={handleAddItem} className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
               <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Título ou Descrição do Fundo
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ex: Textura Geométrica Dourada"
-                  value={newTitle}
-                  onChange={(e) => setNewTitle(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Pasta de Destino
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                  📁 Pasta de Destino
                 </label>
                 <select
                   value={newFolderTarget}
                   onChange={(e) => setNewFolderTarget(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
+                  className="w-full px-3.5 py-2.5 text-xs font-medium rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
                 >
                   {folders.map((f) => (
                     <option key={f.id} value={f.id}>
@@ -692,89 +853,233 @@ export const WallpapersLibraryModal: React.FC<WallpapersLibraryModalProps> = ({
                 </select>
               </div>
 
-              {/* Alternador de Método: Upload do PC ou Link do ImgBB/Web */}
+              {/* Alternador de Método: Upload do PC (Múltiplas Fotos) ou Links URLs */}
               <div>
                 <div className="flex p-1 bg-slate-100 dark:bg-slate-900 rounded-xl mb-3 border border-slate-200 dark:border-slate-800">
                   <button
                     type="button"
                     onClick={() => setAddMode('upload')}
-                    className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                    className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                       addMode === 'upload'
-                        ? 'bg-white dark:bg-slate-800 text-sky-700 dark:text-sky-300 shadow-xs'
-                        : 'text-slate-500'
+                        ? 'bg-white dark:bg-slate-800 text-sky-700 dark:text-sky-300 shadow-sm'
+                        : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
                     }`}
                   >
-                    <Upload size={13} />
-                    <span>Upload do Arquivo</span>
+                    <Upload size={14} />
+                    <span>Upload de Fotos (Arquivos do PC)</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setAddMode('url')}
-                    className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                    className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                       addMode === 'url'
-                        ? 'bg-white dark:bg-slate-800 text-sky-700 dark:text-sky-300 shadow-xs'
-                        : 'text-slate-500'
+                        ? 'bg-white dark:bg-slate-800 text-sky-700 dark:text-sky-300 shadow-sm'
+                        : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
                     }`}
                   >
-                    <LinkIcon size={13} />
-                    <span>Link da Imagem (ImgBB / URL)</span>
+                    <LinkIcon size={14} />
+                    <span>Link da Web / ImgBB / URLs</span>
                   </button>
                 </div>
 
                 {addMode === 'upload' ? (
-                  <div>
-                    <label className="w-full h-32 flex flex-col items-center justify-center gap-2 px-3 py-4 border-2 border-dashed border-sky-300 dark:border-sky-700 bg-sky-50/40 dark:bg-sky-950/20 hover:bg-sky-50 dark:hover:bg-sky-950/30 rounded-2xl cursor-pointer transition-colors text-center">
-                      {uploadBase64 ? (
-                        <div className="relative w-full h-full flex items-center justify-center">
-                          <img
-                            src={uploadBase64}
-                            alt="Prévia"
-                            className="max-h-24 rounded-lg object-cover shadow-xs"
-                          />
+                  <div className="space-y-3">
+                    {/* Área de Seleção / Dropzone */}
+                    <div
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        setIsDraggingOver(true);
+                      }}
+                      onDragLeave={() => setIsDraggingOver(false)}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setIsDraggingOver(false);
+                        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                          handleFilesSelected(e.dataTransfer.files);
+                        }
+                      }}
+                      className={`relative w-full rounded-2xl border-2 border-dashed p-4 text-center transition-all ${
+                        isDraggingOver
+                          ? 'border-sky-500 bg-sky-100/50 dark:bg-sky-950/50 scale-[0.99]'
+                          : 'border-sky-300 dark:border-sky-700 bg-sky-50/40 dark:bg-sky-950/20 hover:bg-sky-50 dark:hover:bg-sky-950/30'
+                      }`}
+                    >
+                      <label className="flex flex-col items-center justify-center gap-2 cursor-pointer py-3">
+                        <div className="w-12 h-12 rounded-2xl bg-sky-500 text-white flex items-center justify-center shadow-md shadow-sky-500/20">
+                          <Upload size={22} />
                         </div>
-                      ) : (
-                        <>
-                          <Upload size={24} className="text-sky-600 dark:text-sky-400" />
-                          <span className="text-xs font-bold text-sky-700 dark:text-sky-300">
-                            Clique para escolher a imagem do seu computador
+                        <div>
+                          <span className="text-xs sm:text-sm font-bold text-sky-700 dark:text-sky-300">
+                            Clique para selecionar uma ou várias fotos
                           </span>
-                          <span className="text-[10px] text-slate-400">JPG, PNG ou WEBP até 8MB</span>
-                        </>
-                      )}
-                      <input type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
-                    </label>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                            ou arraste e solte múltiplos arquivos aqui
+                          </p>
+                        </div>
+                        <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-white dark:bg-slate-800 text-slate-500 border border-slate-200 dark:border-slate-700">
+                          PNG, JPG, JPEG ou WEBP (até 8MB por foto)
+                        </span>
+                        <input
+                          type="file"
+                          multiple
+                          accept="image/*"
+                          onChange={handleFileChange}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+
+                    {/* Lista / Grid de Fotos Pendentes Selecionadas */}
+                    {pendingPhotos.length > 0 && (
+                      <div className="space-y-2 pt-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-slate-900 dark:text-white">
+                              Fotos Selecionadas para Envio
+                            </span>
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                              {pendingPhotos.length} {pendingPhotos.length === 1 ? 'foto' : 'fotos'}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <label className="text-[11px] font-bold text-sky-600 hover:text-sky-700 cursor-pointer flex items-center gap-1">
+                              <Plus size={13} />
+                              <span>Mais Fotos</span>
+                              <input
+                                type="file"
+                                multiple
+                                accept="image/*"
+                                onChange={handleFileChange}
+                                className="hidden"
+                              />
+                            </label>
+                            <span className="text-slate-300 dark:text-slate-700">|</span>
+                            <button
+                              type="button"
+                              onClick={() => setPendingPhotos([])}
+                              className="text-[11px] font-bold text-rose-500 hover:text-rose-600 cursor-pointer flex items-center gap-1"
+                            >
+                              <Trash2 size={13} />
+                              <span>Limpar Tudo</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto p-1 border border-slate-200 dark:border-slate-700 rounded-2xl bg-slate-50/50 dark:bg-slate-900/50">
+                          {pendingPhotos.map((photo) => (
+                            <div
+                              key={photo.id}
+                              className="flex items-center gap-2.5 p-2 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs group"
+                            >
+                              <img
+                                src={photo.base64Data}
+                                alt={photo.title}
+                                className="w-12 h-12 rounded-lg object-cover bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shrink-0"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <input
+                                  type="text"
+                                  value={photo.title}
+                                  onChange={(e) => handleUpdatePendingTitle(photo.id, e.target.value)}
+                                  placeholder="Título da foto"
+                                  className="w-full px-2 py-1 text-xs font-bold rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:bg-white focus:ring-1 focus:ring-sky-500"
+                                  title="Clique para editar o título deste fundo"
+                                />
+                                <div className="flex items-center justify-between mt-1 text-[10px] text-slate-400">
+                                  <span className="truncate max-w-[120px]">{photo.fileName}</span>
+                                  <span>{photo.sizeFormatted}</span>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleRemovePendingPhoto(photo.id)}
+                                className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg cursor-pointer transition-colors"
+                                title="Remover esta foto da fila"
+                              >
+                                <X size={14} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
-                  <div>
-                    <input
-                      type="url"
-                      placeholder="https://i.ibb.co/exemplo/fundo.jpg"
-                      value={newUrl}
-                      onChange={(e) => setNewUrl(e.target.value)}
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
-                    />
-                    <p className="text-[10px] text-slate-400 mt-1">
-                      Dica: cole o link direto da imagem hospedada no ImgBB, Unsplash ou qualquer servidor.
-                    </p>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                        Links Diretos das Imagens (um por linha ou separados por vírgula)
+                      </label>
+                      <textarea
+                        rows={4}
+                        placeholder={`https://i.ibb.co/exemplo1/fundo-luxo.jpg\nhttps://i.ibb.co/exemplo2/fundo-madeira.jpg\nhttps://images.unsplash.com/photo-exemplo`}
+                        value={newUrl}
+                        onChange={(e) => setNewUrl(e.target.value)}
+                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 font-mono"
+                      />
+                      <p className="text-[10px] text-slate-400 mt-1">
+                        Você pode colar múltiplos links de uma só vez (ImgBB, Unsplash, CDN ou servidores externos).
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                        Título Base (Opcional se enviar múltiplos)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Ex: Textura Moderna"
+                        value={newTitle}
+                        onChange={(e) => setNewTitle(e.target.value)}
+                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
+                      />
+                    </div>
                   </div>
                 )}
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-700">
-                <button
-                  type="button"
-                  onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="px-5 py-2 text-xs font-bold text-white bg-sky-600 hover:bg-sky-700 rounded-xl shadow-xs transition disabled:opacity-50 flex items-center gap-1.5"
-                >
-                  {submitting ? 'Salvando...' : 'Adicionar à Galeria'}
-                </button>
+              <div className="flex items-center justify-between pt-3 border-t border-slate-200 dark:border-slate-700">
+                <span className="text-xs text-slate-500">
+                  {addMode === 'upload' && pendingPhotos.length > 0 && (
+                    <span className="font-bold text-sky-600 dark:text-sky-400">
+                      {pendingPhotos.length} {pendingPhotos.length === 1 ? 'foto pronta' : 'fotos prontas'} para envio
+                    </span>
+                  )}
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAddModal(false);
+                      setPendingPhotos([]);
+                    }}
+                    className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={
+                      submitting ||
+                      (addMode === 'upload' && pendingPhotos.length === 0) ||
+                      (addMode === 'url' && !newUrl.trim())
+                    }
+                    className="px-5 py-2 text-xs font-bold text-white bg-sky-600 hover:bg-sky-700 rounded-xl shadow-md transition disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+                  >
+                    {submitting ? (
+                      'Salvando Fotos...'
+                    ) : (
+                      <>
+                        <Upload size={14} />
+                        <span>
+                          {addMode === 'upload' && pendingPhotos.length > 1
+                            ? `Salvar ${pendingPhotos.length} Fotos na Galeria`
+                            : 'Adicionar à Galeria'}
+                        </span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </form>
           </div>

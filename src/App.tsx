@@ -3,8 +3,10 @@ import { Route, Switch, useRoute } from 'wouter';
 import { DigitalCardPublic } from './pages/DigitalCardPublic.tsx';
 import { DigitalCardsManager } from './pages/DigitalCardsManager.tsx';
 import { DegustadorDeliveryPage } from './pages/DegustadorDeliveryPage.tsx';
+import { DeliveryModule } from './pages/DeliveryModule.tsx';
 import { LandingPage } from './pages/LandingPage.tsx';
 import { HelpPage } from './pages/HelpPage.tsx';
+import { ClientOnboardingFormPage } from './pages/ClientOnboardingFormPage.tsx';
 import { ThemeToggle } from './components/ThemeToggle.tsx';
 import { AuthProvider, useAuth } from './contexts/AuthContext.tsx';
 import { AuthModal } from './components/AuthModal.tsx';
@@ -145,6 +147,21 @@ export default function App() {
         {/* Página de Entrega / Modo Degustador (Acesso Rápido ao Cartão & QR Code sem edição) */}
         <Route path="/degustador/:slug" component={DegustadorRoute} />
         <Route path="/degustacao/:slug" component={DegustadorRoute} />
+
+        {/* Formulário Simplificado de Captação para Vendedoras & Clientes */}
+        <Route path="/formulario" component={ClientOnboardingFormPage} />
+        <Route path="/formulario/:salesRep" component={ClientOnboardingFormPage} />
+        <Route path="/solicitar-cartao" component={ClientOnboardingFormPage} />
+        <Route path="/coleta" component={ClientOnboardingFormPage} />
+        <Route path="/onboarding-cliente" component={ClientOnboardingFormPage} />
+
+        {/* Novo Módulo: Kit de Entrega Rápida 1-Clique WhatsApp & Coleta Descomplicada */}
+        <Route path="/entrega" component={DeliveryModule} />
+        <Route path="/entrega/:slug" component={DeliveryModule} />
+        <Route path="/onboarding" component={DeliveryModule} />
+        <Route path="/vencimentos" component={DeliveryModule} />
+        <Route path="/cobrancas" component={DeliveryModule} />
+        <Route path="/financeiro" component={DeliveryModule} />
 
         {/* Rotas de Autenticação */}
         <Route path="/login">

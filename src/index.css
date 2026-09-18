@@ -188,12 +188,15 @@ body.card-hide-site-agent [class*="jf-agent"] {
    ========================================================================== */
 
 /* 1. MODO NEUMORPHISM CLARO NA PLATAFORMA */
-html.theme-neu-light body {
+html.theme-neu-light body,
+html.theme-neu-light .min-h-screen {
   background-color: #E0E5EC !important;
   color: #2D3748 !important;
 }
 
-html.theme-neu-light header.bg-white,
+html.theme-neu-light header,
+html.theme-neu-light footer,
+html.theme-neu-light .neu-box,
 html.theme-neu-light .bg-white:not(#phone-mockup-frame *):not(#public-card-container *):not(.keep-white),
 html.theme-neu-light [class*="bg-white"]:not(#phone-mockup-frame *):not(#public-card-container *):not(.keep-white) {
   background-color: #E0E5EC !important;
@@ -201,11 +204,17 @@ html.theme-neu-light [class*="bg-white"]:not(#phone-mockup-frame *):not(#public-
   box-shadow: 6px 6px 14px #b8b9be, -6px -6px 14px #ffffff !important;
 }
 
-html.theme-neu-light .bg-slate-50:not(#phone-mockup-frame *):not(#public-card-container *),
-html.theme-neu-light .bg-slate-100:not(#phone-mockup-frame *):not(#public-card-container *) {
+html.theme-neu-light .bg-slate-50:not(#phone-mockup-frame *):not(#public-card-container *):not(.keep-white),
+html.theme-neu-light .bg-slate-100:not(#phone-mockup-frame *):not(#public-card-container *):not(.keep-white) {
   background-color: #E0E5EC !important;
   border-color: rgba(255, 255, 255, 0.6) !important;
   box-shadow: inset 3px 3px 6px #b8b9be, inset -3px -3px 6px #ffffff !important;
+}
+
+html.theme-neu-light .bg-slate-200:not(#phone-mockup-frame *):not(#public-card-container *):not(.keep-white) {
+  background-color: #E0E5EC !important;
+  border-color: rgba(255, 255, 255, 0.7) !important;
+  box-shadow: 4px 4px 8px #b8b9be, -4px -4px 8px #ffffff !important;
 }
 
 html.theme-neu-light input:not([type="color"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]):not(#phone-mockup-frame *):not(#public-card-container *),
@@ -218,12 +227,14 @@ html.theme-neu-light select:not(#phone-mockup-frame *):not(#public-card-containe
 }
 
 /* 2. MODO NEUMORPHISM ESCURO NA PLATAFORMA */
-html.theme-neu-dark body {
+html.theme-neu-dark body,
+html.theme-neu-dark .min-h-screen {
   background-color: #14171E !important;
   color: #F1F5F9 !important;
 }
 
-html.theme-neu-dark header.bg-white,
+html.theme-neu-dark header,
+html.theme-neu-dark footer,
 html.theme-neu-dark .bg-white:not(#phone-mockup-frame *):not(#public-card-container *):not(.keep-white),
 html.theme-neu-dark [class*="bg-white"]:not(#phone-mockup-frame *):not(#public-card-container *):not(.keep-white) {
   background-color: #181B22 !important;
@@ -231,10 +242,10 @@ html.theme-neu-dark [class*="bg-white"]:not(#phone-mockup-frame *):not(#public-c
   box-shadow: 6px 6px 16px rgba(0, 0, 0, 0.7), -6px -6px 16px rgba(255, 255, 255, 0.04) !important;
 }
 
-html.theme-neu-dark .bg-slate-50:not(#phone-mockup-frame *):not(#public-card-container *),
-html.theme-neu-dark .bg-slate-100:not(#phone-mockup-frame *):not(#public-card-container *),
-html.theme-neu-dark .bg-slate-800:not(#phone-mockup-frame *):not(#public-card-container *),
-html.theme-neu-dark .bg-slate-900:not(#phone-mockup-frame *):not(#public-card-container *) {
+html.theme-neu-dark .bg-slate-50:not(#phone-mockup-frame *):not(#public-card-container *):not(.keep-white),
+html.theme-neu-dark .bg-slate-100:not(#phone-mockup-frame *):not(#public-card-container *):not(.keep-white),
+html.theme-neu-dark .bg-slate-800:not(#phone-mockup-frame *):not(#public-card-container *):not(.keep-white),
+html.theme-neu-dark .bg-slate-900:not(#phone-mockup-frame *):not(#public-card-container *):not(.keep-white) {
   background-color: #181B22 !important;
   border-color: rgba(255, 255, 255, 0.04) !important;
   box-shadow: inset 3px 3px 7px rgba(0, 0, 0, 0.75), inset -3px -3px 7px rgba(255, 255, 255, 0.03) !important;
@@ -311,4 +322,19 @@ html.theme-neu-dark select:not(#phone-mockup-frame *):not(#public-card-container
   box-shadow: inset 3px 3px 7px rgba(0, 0, 0, 0.8), inset -3px -3px 7px rgba(255, 255, 255, 0.03) !important;
   border: 1px solid rgba(255, 255, 255, 0.05) !important;
 }
+
+/* 4. OCULTAR BARRA DE ROLAGEM MANTENDO A ROLAGEM PERFEITA (PREVIEW DE SMARTPHONES E MOCKUPS) */
+.no-scrollbar,
+.scrollbar-none {
+  -ms-overflow-style: none !important; /* IE e Edge */
+  scrollbar-width: none !important; /* Firefox */
+}
+
+.no-scrollbar::-webkit-scrollbar,
+.scrollbar-none::-webkit-scrollbar {
+  display: none !important; /* Chrome, Safari, Edge WebKit */
+  width: 0 !important;
+  height: 0 !important;
+}
+
 

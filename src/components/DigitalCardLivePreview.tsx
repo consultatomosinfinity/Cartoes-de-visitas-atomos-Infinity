@@ -26,59 +26,154 @@ import { DigitalCardDualPorthole } from './DigitalCardDualPorthole.tsx';
 import { DigitalCardQrCode } from './DigitalCardQrCode.tsx';
 
 export type DeviceModel =
-  | 'iphone-12'
-  | 'iphone-13'
+  | 'iphone-18-pro-max'
+  | 'iphone-18-pro'
+  | 'iphone-16-pro-max'
+  | 'iphone-16-pro'
   | 'iphone-14-pro'
   | 'iphone-14-pro-max'
-  | 'samsung-a12'
-  | 'samsung-s26-ultra';
+  | 'iphone-13'
+  | 'iphone-12'
+  | 'samsung-s26-ultra'
+  | 'samsung-s25-ultra'
+  | 'samsung-s25-plus'
+  | 'samsung-a12';
 
 interface DeviceConfig {
   id: DeviceModel;
   name: string;
   brand: 'Apple' | 'Samsung';
   screenSize: string;
+  tag?: string;
   chassisWidth: string; // Tailwind max-w class
   outerRadius: string;
   innerRadius: string;
   borderWidth: string;
   borderColor: string;
-  cutoutType: 'notch-wide' | 'notch-compact' | 'dynamic-island' | 'dynamic-island-large' | 'infinity-v' | 'infinity-o';
+  cutoutType:
+    | 'notch-wide'
+    | 'notch-compact'
+    | 'dynamic-island'
+    | 'dynamic-island-pro-max'
+    | 'dynamic-island-large'
+    | 'infinity-v'
+    | 'infinity-o'
+    | 'infinity-o-micro';
   time: string;
-  hasSideButtons?: boolean;
+  buttonsStyle?: 'iphone-16' | 'iphone-classic' | 'samsung-ultra' | 'samsung-standard';
   isBoxy?: boolean;
 }
 
 const DEVICES: DeviceConfig[] = [
   {
-    id: 'iphone-12',
-    name: 'iPhone 12',
+    id: 'iphone-18-pro-max',
+    name: 'iPhone 18 Pro Max',
     brand: 'Apple',
-    screenSize: '6.1"',
-    chassisWidth: 'max-w-[345px]',
-    outerRadius: 'rounded-[2.4rem]',
-    innerRadius: 'rounded-[1.75rem]',
-    borderWidth: 'border-[8px]',
-    borderColor: 'border-slate-800 bg-slate-900',
-    cutoutType: 'notch-wide',
+    screenSize: '6.9"',
+    tag: 'Mais Novo · Flagship',
+    chassisWidth: 'max-w-[385px]',
+    outerRadius: 'rounded-[3.3rem]',
+    innerRadius: 'rounded-[2.75rem]',
+    borderWidth: 'border-[4px]',
+    borderColor: 'border-neutral-800 bg-neutral-950',
+    cutoutType: 'dynamic-island-pro-max',
     time: '09:41',
+    buttonsStyle: 'iphone-16',
   },
   {
-    id: 'iphone-13',
-    name: 'iPhone 13 / 13 Pro',
+    id: 'iphone-18-pro',
+    name: 'iPhone 18 Pro',
     brand: 'Apple',
-    screenSize: '6.1"',
-    chassisWidth: 'max-w-[350px]',
-    outerRadius: 'rounded-[2.6rem]',
-    innerRadius: 'rounded-[1.9rem]',
-    borderWidth: 'border-[8px]',
-    borderColor: 'border-slate-800 bg-slate-900',
-    cutoutType: 'notch-compact',
+    screenSize: '6.3"',
+    tag: 'Mais Novo',
+    chassisWidth: 'max-w-[360px]',
+    outerRadius: 'rounded-[3.1rem]',
+    innerRadius: 'rounded-[2.55rem]',
+    borderWidth: 'border-[4px]',
+    borderColor: 'border-stone-800 bg-stone-950',
+    cutoutType: 'dynamic-island',
     time: '09:41',
+    buttonsStyle: 'iphone-16',
+  },
+  {
+    id: 'iphone-16-pro-max',
+    name: 'iPhone 16 Pro Max',
+    brand: 'Apple',
+    screenSize: '6.9"',
+    tag: 'Flagship',
+    chassisWidth: 'max-w-[385px]',
+    outerRadius: 'rounded-[3.2rem]',
+    innerRadius: 'rounded-[2.65rem]',
+    borderWidth: 'border-[5px]',
+    borderColor: 'border-neutral-800 bg-neutral-950',
+    cutoutType: 'dynamic-island-pro-max',
+    time: '09:41',
+    buttonsStyle: 'iphone-16',
+  },
+  {
+    id: 'iphone-16-pro',
+    name: 'iPhone 16 Pro',
+    brand: 'Apple',
+    screenSize: '6.3"',
+    chassisWidth: 'max-w-[360px]',
+    outerRadius: 'rounded-[3rem]',
+    innerRadius: 'rounded-[2.45rem]',
+    borderWidth: 'border-[5px]',
+    borderColor: 'border-stone-800 bg-stone-950',
+    cutoutType: 'dynamic-island',
+    time: '09:41',
+    buttonsStyle: 'iphone-16',
+  },
+  {
+    id: 'samsung-s26-ultra',
+    name: 'Galaxy S26 Ultra',
+    brand: 'Samsung',
+    screenSize: '6.9"',
+    tag: 'Mais Novo · Flagship',
+    chassisWidth: 'max-w-[385px]',
+    outerRadius: 'rounded-[1.2rem]',
+    innerRadius: 'rounded-[0.9rem]',
+    borderWidth: 'border-[4px]',
+    borderColor: 'border-zinc-800 bg-zinc-950',
+    cutoutType: 'infinity-o-micro',
+    time: '12:45',
+    buttonsStyle: 'samsung-ultra',
+    isBoxy: true,
+  },
+  {
+    id: 'samsung-s25-ultra',
+    name: 'Galaxy S25 Ultra',
+    brand: 'Samsung',
+    screenSize: '6.9"',
+    tag: 'Flagship',
+    chassisWidth: 'max-w-[385px]',
+    outerRadius: 'rounded-[1.25rem]', // Formato ergonômico moderno da linha Ultra
+    innerRadius: 'rounded-[0.95rem]',
+    borderWidth: 'border-[4px]',
+    borderColor: 'border-zinc-800 bg-zinc-950',
+    cutoutType: 'infinity-o-micro',
+    time: '12:45',
+    buttonsStyle: 'samsung-ultra',
+    isBoxy: true,
+  },
+  {
+    id: 'samsung-s25-plus',
+    name: 'Galaxy S25+ / S25',
+    brand: 'Samsung',
+    screenSize: '6.7"',
+    tag: 'Novo',
+    chassisWidth: 'max-w-[365px]',
+    outerRadius: 'rounded-[2.7rem]',
+    innerRadius: 'rounded-[2.15rem]',
+    borderWidth: 'border-[5px]',
+    borderColor: 'border-zinc-800 bg-zinc-900',
+    cutoutType: 'infinity-o',
+    time: '12:45',
+    buttonsStyle: 'samsung-standard',
   },
   {
     id: 'iphone-14-pro',
-    name: 'iPhone 14 Pro',
+    name: 'iPhone 14 / 15 Pro',
     brand: 'Apple',
     screenSize: '6.1"',
     chassisWidth: 'max-w-[355px]',
@@ -88,6 +183,7 @@ const DEVICES: DeviceConfig[] = [
     borderColor: 'border-slate-900 bg-slate-950',
     cutoutType: 'dynamic-island',
     time: '09:41',
+    buttonsStyle: 'iphone-classic',
   },
   {
     id: 'iphone-14-pro-max',
@@ -101,6 +197,35 @@ const DEVICES: DeviceConfig[] = [
     borderColor: 'border-slate-900 bg-slate-950',
     cutoutType: 'dynamic-island-large',
     time: '09:41',
+    buttonsStyle: 'iphone-classic',
+  },
+  {
+    id: 'iphone-13',
+    name: 'iPhone 13 / 13 Pro',
+    brand: 'Apple',
+    screenSize: '6.1"',
+    chassisWidth: 'max-w-[350px]',
+    outerRadius: 'rounded-[2.6rem]',
+    innerRadius: 'rounded-[1.9rem]',
+    borderWidth: 'border-[8px]',
+    borderColor: 'border-slate-800 bg-slate-900',
+    cutoutType: 'notch-compact',
+    time: '09:41',
+    buttonsStyle: 'iphone-classic',
+  },
+  {
+    id: 'iphone-12',
+    name: 'iPhone 12',
+    brand: 'Apple',
+    screenSize: '6.1"',
+    chassisWidth: 'max-w-[345px]',
+    outerRadius: 'rounded-[2.4rem]',
+    innerRadius: 'rounded-[1.75rem]',
+    borderWidth: 'border-[8px]',
+    borderColor: 'border-slate-800 bg-slate-900',
+    cutoutType: 'notch-wide',
+    time: '09:41',
+    buttonsStyle: 'iphone-classic',
   },
   {
     id: 'samsung-a12',
@@ -114,20 +239,7 @@ const DEVICES: DeviceConfig[] = [
     borderColor: 'border-zinc-700 bg-zinc-800',
     cutoutType: 'infinity-v',
     time: '12:45',
-  },
-  {
-    id: 'samsung-s26-ultra',
-    name: 'Galaxy S26 Ultra',
-    brand: 'Samsung',
-    screenSize: '6.9"',
-    chassisWidth: 'max-w-[385px]',
-    outerRadius: 'rounded-[0.9rem]', // Formato icônico quase retangular da linha Note/Ultra
-    innerRadius: 'rounded-[0.6rem]',
-    borderWidth: 'border-[5px]',
-    borderColor: 'border-zinc-900 bg-zinc-950',
-    cutoutType: 'infinity-o',
-    time: '10:08',
-    isBoxy: true,
+    buttonsStyle: 'samsung-standard',
   },
 ];
 
@@ -136,7 +248,7 @@ interface DigitalCardLivePreviewProps {
 }
 
 export const DigitalCardLivePreview: React.FC<DigitalCardLivePreviewProps> = ({ card }) => {
-  const [selectedDeviceId, setSelectedDeviceId] = useState<DeviceModel>('iphone-14-pro');
+  const [selectedDeviceId, setSelectedDeviceId] = useState<DeviceModel>('iphone-18-pro-max');
   const [brandFilter, setBrandFilter] = useState<'all' | 'Apple' | 'Samsung'>('all');
   const [isSelectorOpen, setIsSelectorOpen] = useState(false);
 
@@ -213,34 +325,39 @@ export const DigitalCardLivePreview: React.FC<DigitalCardLivePreviewProps> = ({ 
   return (
     <div className="w-full flex flex-col items-center">
       {/* Barra de Seleção de Dispositivo Recolhível */}
-      <div className="w-full mb-4 bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden transition-all duration-200">
+      <div className="w-full mb-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs overflow-hidden transition-all duration-200">
         {/* Cabeçalho do seletor (sempre visível e clicável para expandir/recolher) */}
         <button
           type="button"
           onClick={() => setIsSelectorOpen(!isSelectorOpen)}
-          className="w-full flex items-center justify-between p-3 bg-white hover:bg-slate-50/80 transition-colors text-left cursor-pointer"
+          className="w-full flex items-center justify-between p-3 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/80 transition-colors text-left cursor-pointer"
           aria-expanded={isSelectorOpen}
         >
           <div className="flex items-center gap-2 min-w-0">
-            <div className="w-7 h-7 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center shrink-0 border border-sky-100">
+            <div className="w-7 h-7 rounded-lg bg-sky-50 dark:bg-sky-950/60 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0 border border-sky-100 dark:border-sky-900/40">
               <Smartphone size={15} />
             </div>
             <div className="flex items-center gap-1.5 truncate">
-              <span className="text-xs font-semibold text-slate-500">Dispositivo:</span>
-              <span className="text-xs font-bold text-slate-900 truncate">
+              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Dispositivo:</span>
+              <span className="text-xs font-bold text-slate-900 dark:text-white truncate">
                 {currentDevice.name}
               </span>
-              <span className="text-[10px] font-medium text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-md shrink-0">
+              {currentDevice.tag && (
+                <span className="text-[9px] font-extrabold text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-950/80 border border-amber-300 dark:border-amber-700/50 px-1.5 py-0.2 rounded-md shrink-0">
+                  {currentDevice.tag}
+                </span>
+              )}
+              <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded-md shrink-0">
                 {currentDevice.brand} · {currentDevice.screenSize}
               </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-1 text-slate-400 hover:text-slate-600 text-xs font-semibold shrink-0 ml-2">
-            <span className="text-[11px] text-sky-600 font-bold hidden sm:inline">
+          <div className="flex items-center gap-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs font-semibold shrink-0 ml-2">
+            <span className="text-[11px] text-sky-600 dark:text-sky-400 font-bold hidden sm:inline">
               {isSelectorOpen ? 'Ocultar modelos' : 'Alterar modelo'}
             </span>
-            <div className="w-6 h-6 rounded-md bg-slate-100 flex items-center justify-center text-slate-600">
+            <div className="w-6 h-6 rounded-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300">
               {isSelectorOpen ? <ChevronDown size={14} className="rotate-180 transition-transform duration-200" /> : <ChevronDown size={14} className="transition-transform duration-200" />}
             </div>
           </div>
@@ -248,18 +365,18 @@ export const DigitalCardLivePreview: React.FC<DigitalCardLivePreviewProps> = ({ 
 
         {/* Conteúdo Recolhível */}
         {isSelectorOpen && (
-          <div className="p-3 pt-1 border-t border-slate-100 bg-slate-50/50 space-y-2.5 animate-in fade-in duration-150">
+          <div className="p-3 pt-1 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 space-y-2.5 animate-in fade-in duration-150">
             {/* Filtro por Marca */}
             <div className="flex items-center justify-between pt-1">
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+              <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                 Escolha o Mockup
               </span>
-              <div className="flex items-center bg-slate-200/70 p-0.5 rounded-lg text-[11px] font-semibold text-slate-600">
+              <div className="flex items-center bg-slate-200/70 dark:bg-slate-800 p-0.5 rounded-lg text-[11px] font-semibold text-slate-600 dark:text-slate-300">
                 <button
                   type="button"
                   onClick={() => setBrandFilter('all')}
                   className={`px-2 py-0.5 rounded-md transition-all cursor-pointer ${
-                    brandFilter === 'all' ? 'bg-white text-slate-900 shadow-xs' : 'hover:text-slate-900'
+                    brandFilter === 'all' ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs' : 'hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
                   Todos
@@ -268,7 +385,7 @@ export const DigitalCardLivePreview: React.FC<DigitalCardLivePreviewProps> = ({ 
                   type="button"
                   onClick={() => setBrandFilter('Apple')}
                   className={`px-2 py-0.5 rounded-md transition-all cursor-pointer ${
-                    brandFilter === 'Apple' ? 'bg-white text-slate-900 shadow-xs' : 'hover:text-slate-900'
+                    brandFilter === 'Apple' ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs' : 'hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
                   Apple
@@ -277,7 +394,7 @@ export const DigitalCardLivePreview: React.FC<DigitalCardLivePreviewProps> = ({ 
                   type="button"
                   onClick={() => setBrandFilter('Samsung')}
                   className={`px-2 py-0.5 rounded-md transition-all cursor-pointer ${
-                    brandFilter === 'Samsung' ? 'bg-white text-slate-900 shadow-xs' : 'hover:text-slate-900'
+                    brandFilter === 'Samsung' ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs' : 'hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
                   Samsung
@@ -297,19 +414,26 @@ export const DigitalCardLivePreview: React.FC<DigitalCardLivePreviewProps> = ({ 
                       setSelectedDeviceId(dev.id);
                       setIsSelectorOpen(false); // Recolhe automaticamente após escolher para economizar espaço
                     }}
-                    className={`flex flex-col items-start p-2 rounded-xl border text-left transition-all cursor-pointer ${
+                    className={`flex flex-col items-start p-2 rounded-xl border text-left transition-all cursor-pointer relative ${
                       isSelected
-                        ? 'border-sky-600 bg-sky-50 text-sky-900 ring-2 ring-sky-600/20 font-bold shadow-xs'
-                        : 'border-slate-200 bg-white hover:bg-slate-100/80 text-slate-700'
+                        ? 'border-sky-600 bg-sky-50 dark:bg-sky-950/40 text-sky-900 dark:text-sky-200 ring-2 ring-sky-600/20 font-bold shadow-xs'
+                        : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-100/80 dark:hover:bg-slate-800/60 text-slate-700 dark:text-slate-300'
                     }`}
                   >
                     <div className="flex items-center justify-between w-full">
                       <span className="text-xs truncate">{dev.name}</span>
-                      {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-sky-600" />}
+                      {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-sky-600 shrink-0" />}
                     </div>
-                    <span className="text-[10px] text-slate-400 font-normal">
-                      {dev.brand} · {dev.screenSize}
-                    </span>
+                    <div className="flex items-center justify-between w-full mt-0.5 gap-1">
+                      <span className="text-[10px] text-slate-400 dark:text-slate-500 font-normal">
+                        {dev.brand} · {dev.screenSize}
+                      </span>
+                      {dev.tag && (
+                        <span className="text-[8px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 px-1 py-0.2 rounded-xs shrink-0">
+                          {dev.tag.replace(' · Flagship', '')}
+                        </span>
+                      )}
+                    </div>
                   </button>
                 );
               })}
@@ -325,36 +449,72 @@ export const DigitalCardLivePreview: React.FC<DigitalCardLivePreviewProps> = ({ 
           id="phone-mockup-frame"
           className={`relative w-full ${currentDevice.chassisWidth} ${currentDevice.outerRadius} p-2.5 sm:p-3 shadow-2xl ${currentDevice.borderWidth} ${currentDevice.borderColor} transition-all duration-300`}
         >
-          {/* Botão de volume / power esquerdo decorativo */}
-          <div className="absolute -left-[11px] top-24 w-[3px] h-9 bg-slate-700 rounded-l-sm" />
-          <div className="absolute -left-[11px] top-36 w-[3px] h-9 bg-slate-700 rounded-l-sm" />
-          {/* Botão lateral direito decorativo */}
-          <div className="absolute -right-[11px] top-28 w-[3px] h-12 bg-slate-700 rounded-r-sm" />
+          {/* Botões do iPhone 16 (Action Button, Volume Up, Volume Down, Power Button e Camera Control) */}
+          {currentDevice.buttonsStyle === 'iphone-16' && (
+            <>
+              {/* Botão de Ação (topo esquerdo) */}
+              <div className="absolute -left-[9px] top-20 w-[4px] h-5 bg-neutral-600 rounded-l-xs border-y border-l border-neutral-700" title="Botão de Ação" />
+              {/* Volume + e Volume - */}
+              <div className="absolute -left-[9px] top-28 w-[4px] h-10 bg-neutral-600 rounded-l-xs border-y border-l border-neutral-700" title="Aumentar Volume" />
+              <div className="absolute -left-[9px] top-40 w-[4px] h-10 bg-neutral-600 rounded-l-xs border-y border-l border-neutral-700" title="Diminuir Volume" />
+              {/* Botão Lateral Power */}
+              <div className="absolute -right-[9px] top-24 w-[4px] h-14 bg-neutral-600 rounded-r-xs border-y border-r border-neutral-700" title="Botão Lateral" />
+              {/* Novo Controle de Câmera (Camera Control - Face táctil capacitiva no canto inferior direito) */}
+              <div className="absolute -right-[9px] top-44 w-[4px] h-12 bg-neutral-500 rounded-r-xs border-y border-r border-neutral-400/80 ring-1 ring-neutral-700/50" title="Camera Control" />
+            </>
+          )}
+
+          {/* Botões do iPhone Clássico */}
+          {currentDevice.buttonsStyle === 'iphone-classic' && (
+            <>
+              <div className="absolute -left-[11px] top-20 w-[3px] h-6 bg-slate-700 rounded-l-sm" />
+              <div className="absolute -left-[11px] top-29 w-[3px] h-10 bg-slate-700 rounded-l-sm" />
+              <div className="absolute -left-[11px] top-42 w-[3px] h-10 bg-slate-700 rounded-l-sm" />
+              <div className="absolute -right-[11px] top-28 w-[3px] h-14 bg-slate-700 rounded-r-sm" />
+            </>
+          )}
+
+          {/* Botões do Samsung Ultra (Chassi de Titânio Flat + Tecla de Volume e Energia no lado direito + S-Pen slot) */}
+          {currentDevice.buttonsStyle === 'samsung-ultra' && (
+            <>
+              {/* Tecla de Volume Dupla na direita */}
+              <div className="absolute -right-[8px] top-22 w-[4px] h-16 bg-zinc-600 rounded-r-xs border-y border-r border-zinc-500" title="Volume" />
+              {/* Tecla Lateral Liga/Desliga */}
+              <div className="absolute -right-[8px] top-42 w-[4px] h-10 bg-zinc-600 rounded-r-xs border-y border-r border-zinc-500" title="Energia" />
+              {/* Detalhe da S-Pen no canto inferior esquerdo */}
+              <div className="absolute -bottom-[6px] left-6 w-5 h-[3px] bg-zinc-700 rounded-b-xs border-x border-b border-zinc-600" title="Compartimento S-Pen" />
+            </>
+          )}
+
+          {/* Botões do Samsung Standard */}
+          {currentDevice.buttonsStyle === 'samsung-standard' && (
+            <>
+              <div className="absolute -right-[9px] top-24 w-[3px] h-14 bg-zinc-600 rounded-r-xs" />
+              <div className="absolute -right-[9px] top-42 w-[3px] h-9 bg-zinc-600 rounded-r-xs" />
+            </>
+          )}
 
           {/* STATUS BAR E RECORTE DO DISPOSITIVO (NOTCH / DYNAMIC ISLAND / PUNCH-HOLE) */}
-          <div className="relative w-full z-20 mb-1 px-3 pt-1 flex items-center justify-between text-[11px] font-bold tracking-tight text-slate-800">
+          <div className="relative w-full z-20 mb-1 px-3 pt-1 flex items-center justify-between text-[11px] font-bold tracking-tight text-slate-800 dark:text-slate-200">
             {/* Hora */}
-            <span className="w-12 text-left">{currentDevice.time}</span>
+            <span className="w-12 text-left font-mono">{currentDevice.time}</span>
 
             {/* Recorte Específico do Modelo */}
             <div className="flex-1 flex justify-center">
-              {/* iPhone 12: Notch clássico largo */}
-              {currentDevice.cutoutType === 'notch-wide' && (
-                <div className="w-36 h-4 bg-slate-900 rounded-b-xl flex items-center justify-center -mt-1 shadow-xs">
-                  <div className="w-12 h-1 bg-slate-800 rounded-full" />
+              {/* iPhone 16 Pro Max: Dynamic Island Pro Max com acabamento ultra-fino e sensores */}
+              {currentDevice.cutoutType === 'dynamic-island-pro-max' && (
+                <div className="w-26 h-5 bg-black rounded-full flex items-center justify-between px-2 text-[8px] text-white shadow-md ring-1 ring-neutral-900">
+                  <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 rounded-full bg-neutral-900 ring-1 ring-neutral-800" />
+                    <div className="w-1 h-1 rounded-full bg-blue-950/60" />
+                  </div>
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                 </div>
               )}
 
-              {/* iPhone 13: Notch compacto */}
-              {currentDevice.cutoutType === 'notch-compact' && (
-                <div className="w-28 h-4 bg-slate-900 rounded-b-xl flex items-center justify-center -mt-1 shadow-xs">
-                  <div className="w-9 h-1 bg-slate-800 rounded-full" />
-                </div>
-              )}
-
-              {/* iPhone 14 Pro: Dynamic Island */}
+              {/* iPhone 16 Pro / 14 Pro: Dynamic Island */}
               {currentDevice.cutoutType === 'dynamic-island' && (
-                <div className="w-24 h-5 bg-black rounded-full flex items-center justify-between px-2 text-[8px] text-white shadow-md">
+                <div className="w-24 h-5 bg-black rounded-full flex items-center justify-between px-2 text-[8px] text-white shadow-md ring-1 ring-neutral-900">
                   <div className="w-2.5 h-2.5 rounded-full bg-slate-900 ring-1 ring-slate-800" />
                   <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                 </div>
@@ -368,6 +528,20 @@ export const DigitalCardLivePreview: React.FC<DigitalCardLivePreviewProps> = ({ 
                 </div>
               )}
 
+              {/* Samsung Galaxy S25 / S26 Ultra: Micro Infinity-O (Câmera de abertura ultra-fina centralizada) */}
+              {currentDevice.cutoutType === 'infinity-o-micro' && (
+                <div className="w-2.5 h-2.5 rounded-full bg-black ring-1 ring-zinc-800 flex items-center justify-center shadow-xs">
+                  <div className="w-1 h-1 rounded-full bg-sky-900" />
+                </div>
+              )}
+
+              {/* Samsung Galaxy S25+ / S25: Infinity-O padrão */}
+              {currentDevice.cutoutType === 'infinity-o' && (
+                <div className="w-3 h-3 rounded-full bg-black ring-1 ring-zinc-800 flex items-center justify-center shadow-xs">
+                  <div className="w-1 h-1 rounded-full bg-blue-900" />
+                </div>
+              )}
+
               {/* Samsung Galaxy A12: Infinity-V (Waterdrop notch) */}
               {currentDevice.cutoutType === 'infinity-v' && (
                 <div className="w-5 h-3.5 bg-zinc-800 rounded-b-full -mt-1 flex items-center justify-center">
@@ -375,16 +549,23 @@ export const DigitalCardLivePreview: React.FC<DigitalCardLivePreviewProps> = ({ 
                 </div>
               )}
 
-              {/* Samsung Galaxy S26 Ultra: Infinity-O (Câmera centralizada minúscula) */}
-              {currentDevice.cutoutType === 'infinity-o' && (
-                <div className="w-3 h-3 rounded-full bg-black ring-1 ring-zinc-800 flex items-center justify-center shadow-xs">
-                  <div className="w-1 h-1 rounded-full bg-blue-900" />
+              {/* iPhone 13: Notch compacto */}
+              {currentDevice.cutoutType === 'notch-compact' && (
+                <div className="w-28 h-4 bg-slate-900 rounded-b-xl flex items-center justify-center -mt-1 shadow-xs">
+                  <div className="w-9 h-1 bg-slate-800 rounded-full" />
+                </div>
+              )}
+
+              {/* iPhone 12: Notch clássico largo */}
+              {currentDevice.cutoutType === 'notch-wide' && (
+                <div className="w-36 h-4 bg-slate-900 rounded-b-xl flex items-center justify-center -mt-1 shadow-xs">
+                  <div className="w-12 h-1 bg-slate-800 rounded-full" />
                 </div>
               )}
             </div>
 
             {/* Ícones de Rede e Bateria */}
-            <div className="w-12 flex items-center justify-end gap-1 text-slate-700">
+            <div className="w-12 flex items-center justify-end gap-1 text-slate-700 dark:text-slate-300">
               <Wifi size={12} />
               <Battery size={13} />
             </div>
@@ -406,7 +587,7 @@ export const DigitalCardLivePreview: React.FC<DigitalCardLivePreviewProps> = ({ 
 
           {/* TELA INTERNA DO DISPOSITIVO */}
           <div
-            className={`w-full ${currentDevice.innerRadius} overflow-y-auto max-h-[620px] shadow-inner text-slate-800 scrollbar-thin flex flex-col relative`}
+            className={`w-full ${currentDevice.innerRadius} overflow-y-auto max-h-[620px] shadow-inner text-slate-800 no-scrollbar scrollbar-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden flex flex-col relative`}
             style={{
               backgroundColor: isGlassmorphismTheme(card.appearanceTheme)
                 ? (card.appearanceTheme === 'glass_dark' ? '#090D16' : '#0F172A')

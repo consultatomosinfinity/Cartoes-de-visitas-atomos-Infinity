@@ -27,6 +27,7 @@ import { DigitalCardDualPorthole } from '../components/DigitalCardDualPorthole.t
 import { DigitalCardQrCode } from '../components/DigitalCardQrCode.tsx';
 import { DigitalCardPwaInstall } from '../components/DigitalCardPwaInstall.tsx';
 import { AiAgentModal } from '../components/AiAgentModal.tsx';
+import { buildWhatsAppUrl, sanitizeWhatsAppText } from '../utils/whatsapp.ts';
 
 interface DigitalCardPublicProps {
   slug: string;
@@ -383,8 +384,8 @@ export const DigitalCardPublic: React.FC<DigitalCardPublicProps> = ({ slug }) =>
   const cardPublicUrl = typeof window !== 'undefined'
     ? `${window.location.origin}/cartao/${card.slug}?v=${timestamp}`
     : `/cartao/${card.slug}`;
-  const whatsappShareText = `Olá! Acabei de receber o cartão digital de ${card.name}.\nAcesse e salve o contato: ${cardPublicUrl}`;
-  const whatsappShareUrl = `https://wa.me/?text=${encodeURIComponent(whatsappShareText)}`;
+  const whatsappShareText = sanitizeWhatsAppText(`Olá! Acabei de receber o cartão digital de ${card.name}.\nAcesse e salve o contato: ${cardPublicUrl}`);
+  const whatsappShareUrl = buildWhatsAppUrl('', whatsappShareText);
 
   const headerTextColor = getContrastTextColor(card.backgroundColor);
   const actionButtonTextColor = getContrastTextColor(card.buttonColor);

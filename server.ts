@@ -8,8 +8,8 @@ import { normalizeAiAgentInput, parseAiAgentInput } from './shared/digital-card-
 const app = express();
 const PORT = 3000;
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '100mb' }));
+app.use(express.urlencoded({ extended: true, limit: '100mb' }));
 
 // Contas Master com acesso irrestrito
 export const MASTER_EMAILS = [
@@ -41,6 +41,7 @@ const USERS_FILE = path.join(DATA_DIR, 'users.json');
 const LANDING_TEMPLATE_FILE = path.join(DATA_DIR, 'landing_template.json');
 const SYSTEM_SETTINGS_FILE = path.join(DATA_DIR, 'system_settings.json');
 const WALLPAPERS_FILE = path.join(DATA_DIR, 'wallpapers.json');
+const ONBOARDING_FORMS_FILE = path.join(DATA_DIR, 'onboarding_forms.json');
 
 const DEFAULT_WALLPAPERS_DATA = {
   folders: [
@@ -795,6 +796,49 @@ app.delete('/api/cards/:id', (req, res) => {
   res.json({ success: true });
 });
 
+// Duplicar / Clonar Cartão (com novo slug exclusivo)
+app.post('/api/cards/:id/duplicate', (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const cards = readJson<any[]>(CARDS_FILE, []);
+  const source = cards.find((c) => c.id === id);
+
+  if (!source) {
+    return res.status(404).json({ error: 'Cartão de origem não encontrado.' });
+  }
+
+  const requestedSlug = req.body?.slug ? String(req.body.slug).toLowerCase().trim() : '';
+  let finalSlug = requestedSlug;
+
+  if (!finalSlug || !/^[a-z0-9-]+$/.test(finalSlug)) {
+    // Gera slug incremental a partir do original
+    const baseSlug = source.slug.replace(/-copia(-\d+)?$/, '');
+    let counter = 1;
+    finalSlug = `${baseSlug}-copia`;
+    while (cards.some((c) => c.slug === finalSlug)) {
+      counter++;
+      finalSlug = `${baseSlug}-copia-${counter}`;
+    }
+  } else {
+    if (cards.some((c) => c.slug === finalSlug)) {
+      return res.status(400).json({ error: 'Este slug já está em uso.' });
+    }
+  }
+
+  const newCard = {
+    ...source,
+    id: Date.now(),
+    slug: finalSlug,
+    name: req.body?.name || `${source.name} (Cópia)`,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  cards.push(newCard);
+  writeJson(CARDS_FILE, cards);
+  notifyCardUpdate(newCard, 'created');
+  res.status(201).json(newCard);
+});
+
 // ----------------------------------------------------
 // 4. EVENTOS ANÔNIMOS (Métricas 100% livres de identificação)
 // ----------------------------------------------------
@@ -1467,6 +1511,64 @@ app.delete('/api/wallpapers/folders/:id', (req, res) => {
   }
 });
 
+// Adicionar múltiplos papéis de parede em lote (Batch Upload)
+app.post('/api/wallpapers/items/batch', (req, res) => {
+  try {
+    const { items: batchItems, folderId: defaultFolderId } = req.body;
+
+    if (!Array.isArray(batchItems) || batchItems.length === 0) {
+      return res.status(400).json({ error: 'Nenhum item fornecido para upload em lote.' });
+    }
+
+    const data = getWallpapersData();
+    const wallpapersDir = path.join(process.cwd(), 'public', 'wallpapers');
+    if (!fs.existsSync(wallpapersDir)) {
+      fs.mkdirSync(wallpapersDir, { recursive: true });
+    }
+
+    const newlyAddedItems: any[] = [];
+
+    for (let i = 0; i < batchItems.length; i++) {
+      const item = batchItems[i];
+      const title = (item.title || `Fundo ${Date.now()}-${i + 1}`).trim();
+      let finalUrl = item.url ? item.url.trim() : '';
+
+      if (item.base64Data) {
+        const match = item.base64Data.match(/^data:image\/([a-zA-Z0-9+]+);base64,(.+)$/);
+        if (match) {
+          const ext = match[1] === 'jpeg' ? 'jpg' : match[1];
+          const buffer = Buffer.from(match[2], 'base64');
+          const cleanName = (item.fileName || title || 'wallpaper').toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 30);
+          const savedFileName = `${Date.now()}-${i}-${cleanName}.${ext}`;
+          const savePath = path.join(wallpapersDir, savedFileName);
+          fs.writeFileSync(savePath, buffer);
+          finalUrl = `/wallpapers/${savedFileName}`;
+        }
+      }
+
+      if (finalUrl) {
+        const newItem = {
+          id: `wp-${Date.now()}-${i}-${Math.random().toString(36).substring(2, 6)}`,
+          title: title,
+          url: finalUrl,
+          thumbnailUrl: finalUrl,
+          folderId: item.folderId || defaultFolderId || (data.folders[0]?.id || 'corporativo'),
+          recommendedTheme: item.recommendedTheme || 'personalizado',
+          createdAt: new Date().toISOString(),
+        };
+        data.items.unshift(newItem);
+        newlyAddedItems.push(newItem);
+      }
+    }
+
+    writeJson(WALLPAPERS_FILE, data);
+    return res.status(201).json({ success: true, addedCount: newlyAddedItems.length, items: data.items, newItems: newlyAddedItems });
+  } catch (err: any) {
+    console.error('Erro ao adicionar fundos em lote:', err);
+    return res.status(500).json({ error: err.message || 'Erro ao adicionar fundos em lote.' });
+  }
+});
+
 // Adicionar novo papel de parede / fundo (Master) - via URL ou Upload Base64 no public/wallpapers
 app.post('/api/wallpapers/items', (req, res) => {
   try {
@@ -1486,7 +1588,11 @@ app.post('/api/wallpapers/items', (req, res) => {
         const buffer = Buffer.from(match[2], 'base64');
         const cleanName = (fileName || 'wallpaper').toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 30);
         const savedFileName = `${Date.now()}-${cleanName}.${ext}`;
-        const savePath = path.join(process.cwd(), 'public', 'wallpapers', savedFileName);
+        const wallpapersDir = path.join(process.cwd(), 'public', 'wallpapers');
+        if (!fs.existsSync(wallpapersDir)) {
+          fs.mkdirSync(wallpapersDir, { recursive: true });
+        }
+        const savePath = path.join(wallpapersDir, savedFileName);
         fs.writeFileSync(savePath, buffer);
         finalUrl = `/wallpapers/${savedFileName}`;
       }
@@ -1535,6 +1641,531 @@ app.delete('/api/wallpapers/items/:id', (req, res) => {
     return res.status(500).json({ error: err.message || 'Erro ao excluir fundo.' });
   }
 });
+
+// ----------------------------------------------------
+// FORMULÁRIO SIMPLIFICADO DE CAPTAÇÃO (VENDEDORAS & CLIENTES)
+// ----------------------------------------------------
+function getOnboardingForms(): any[] {
+  const existing = readJson<any[]>(ONBOARDING_FORMS_FILE, null);
+  if (!existing) {
+    // Exemplo de demonstração inicial para o Master visualizar
+    const demoForms = [
+      {
+        id: 'form-demo-1',
+        createdAt: new Date(Date.now() - 3600000 * 2).toISOString(),
+        updatedAt: new Date(Date.now() - 3600000 * 2).toISOString(),
+        status: 'pendente',
+        salesRepName: 'Carla Silveira',
+        salesRepPhone: '(15) 99888-1234',
+        fullName: 'Dra. Mariana Vasconcelos',
+        jobTitle: 'Médica Dermatologista & Estética Avançada',
+        companyName: 'Clínica Vasconcelos Pele & Bem-Estar',
+        whatsappPhone: '(15) 99765-4321',
+        secondaryPhone: '(15) 3232-1000',
+        email: 'contato@clinicavasconcelos.com.br',
+        city: 'Sorocaba',
+        state: 'SP',
+        fullAddress: 'Av. Antonio Carlos Comitre, 1200 - Sala 84 - Campolim',
+        summaryBio: 'Dermatologia clínica, cirúrgica e procedimentos estéticos de alta tecnologia. Cuidando da saúde e da harmonia da sua pele.',
+        photoUrl: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&w=600&q=80',
+        logoUrl: 'https://images.unsplash.com/photo-1599305445671-ac291c95aaa9?auto=format&fit=crop&w=400&q=80',
+        instagramHandle: '@dra.marianavasconcelos',
+        websiteUrl: 'https://clinicavasconcelos.com.br',
+        customLinkName: 'Agendamento Online via WhatsApp',
+        customLinkUrl: 'https://wa.me/5515997654321',
+        pixKey: 'contato@clinicavasconcelos.com.br',
+        pixType: 'email',
+        pixBeneficiary: 'Mariana Vasconcelos Sociedade Médica',
+        preferredTheme: 'ouro_luxo',
+        notes: 'Gostaria de tons dourados e preto sóbrio para passar sensação de luxo e sofisticação.',
+      },
+      {
+        id: 'form-demo-2',
+        createdAt: new Date(Date.now() - 3600000 * 18).toISOString(),
+        updatedAt: new Date(Date.now() - 3600000 * 18).toISOString(),
+        status: 'pendente',
+        salesRepName: 'Juliana Mendes',
+        salesRepPhone: '(15) 99123-5566',
+        fullName: 'Roberto Albuquerque',
+        jobTitle: 'Consultor Imobiliário de Alto Padrão',
+        companyName: 'Albuquerque Private Properties',
+        whatsappPhone: '(11) 98765-4321',
+        email: 'roberto@albuquerqueproperties.com',
+        city: 'São Paulo',
+        state: 'SP',
+        fullAddress: 'Rua Oscar Freire, 950 - Jardins',
+        summaryBio: 'Especialista em compra, venda e investimentos em imóveis de luxo nos Jardins, Itaim Bibi e Fazenda Boa Vista.',
+        photoUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80',
+        instagramHandle: '@roberto.luxurybroker',
+        websiteUrl: 'https://albuquerqueproperties.com',
+        customLinkName: 'Catálogo de Imóveis Exclusivos',
+        customLinkUrl: 'https://albuquerqueproperties.com/catalogo',
+        pixKey: '11987654321',
+        pixType: 'telefone',
+        pixBeneficiary: 'Roberto Albuquerque',
+        preferredTheme: 'azul_corporativo',
+        notes: 'Por favor incluir botão de chamada direta para o WhatsApp e vCard completo.',
+      },
+    ];
+    writeJson(ONBOARDING_FORMS_FILE, demoForms);
+    return demoForms;
+  }
+  return existing;
+}
+
+// Listar todos os formulários recebidos
+app.get('/api/onboarding-forms', (req, res) => {
+  const forms = getOnboardingForms();
+  const sorted = [...forms].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  res.json(sorted);
+});
+
+// Salvar um novo formulário de onboarding (Público / Vendedora / Cliente)
+app.post('/api/onboarding-forms', (req, res) => {
+  try {
+    const body = req.body || {};
+    if (!body.fullName || !body.whatsappPhone) {
+      return res.status(400).json({ error: 'Nome e WhatsApp são obrigatórios.' });
+    }
+
+    const forms = getOnboardingForms();
+    const uploadsDir = path.join(process.cwd(), 'public', 'wallpapers');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+
+    let photoUrl = body.photoUrl || '';
+    if (photoUrl && photoUrl.startsWith('data:image/')) {
+      const match = photoUrl.match(/^data:image\/([a-zA-Z0-9+]+);base64,(.+)$/);
+      if (match) {
+        const ext = match[1] === 'jpeg' ? 'jpg' : match[1];
+        const filename = `avatar-form-${Date.now()}-${Math.random().toString(36).substring(2, 7)}.${ext}`;
+        const filePath = path.join(uploadsDir, filename);
+        fs.writeFileSync(filePath, Buffer.from(match[2], 'base64'));
+        photoUrl = `/wallpapers/${filename}`;
+      }
+    }
+
+    let logoUrl = body.logoUrl || '';
+    if (logoUrl && logoUrl.startsWith('data:image/')) {
+      const match = logoUrl.match(/^data:image\/([a-zA-Z0-9+]+);base64,(.+)$/);
+      if (match) {
+        const ext = match[1] === 'jpeg' ? 'jpg' : match[1];
+        const filename = `logo-form-${Date.now()}-${Math.random().toString(36).substring(2, 7)}.${ext}`;
+        const filePath = path.join(uploadsDir, filename);
+        fs.writeFileSync(filePath, Buffer.from(match[2], 'base64'));
+        logoUrl = `/wallpapers/${filename}`;
+      }
+    }
+
+    const newForm = {
+      id: `form-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      status: 'pendente',
+      salesRepName: body.salesRepName ? String(body.salesRepName).trim() : '',
+      salesRepPhone: body.salesRepPhone ? String(body.salesRepPhone).trim() : '',
+      fullName: String(body.fullName).trim(),
+      jobTitle: String(body.jobTitle || '').trim(),
+      companyName: String(body.companyName || '').trim(),
+      whatsappPhone: String(body.whatsappPhone).trim(),
+      secondaryPhone: String(body.secondaryPhone || '').trim(),
+      email: String(body.email || '').trim(),
+      city: String(body.city || '').trim(),
+      state: String(body.state || '').trim(),
+      fullAddress: String(body.fullAddress || '').trim(),
+      summaryBio: String(body.summaryBio || '').trim(),
+      photoUrl,
+      logoUrl,
+      contentBackgroundUrl: String(body.contentBackgroundUrl || '').trim(),
+      instagramHandle: String(body.instagramHandle || '').trim(),
+      websiteUrl: String(body.websiteUrl || '').trim(),
+      linkedinUrl: String(body.linkedinUrl || '').trim(),
+      facebookUrl: String(body.facebookUrl || '').trim(),
+      youtubeUrl: String(body.youtubeUrl || '').trim(),
+      tiktokUrl: String(body.tiktokUrl || '').trim(),
+      customLinkName: String(body.customLinkName || '').trim(),
+      customLinkUrl: String(body.customLinkUrl || '').trim(),
+      pixKey: String(body.pixKey || '').trim(),
+      pixType: body.pixType || 'chave_aleatoria',
+      pixBeneficiary: String(body.pixBeneficiary || '').trim(),
+      preferredTheme: body.preferredTheme || 'azul_corporativo',
+      notes: String(body.notes || '').trim(),
+    };
+
+    forms.unshift(newForm);
+    writeJson(ONBOARDING_FORMS_FILE, forms);
+
+    return res.status(201).json({
+      success: true,
+      message: 'Formulário enviado com sucesso!',
+      form: newForm,
+    });
+  } catch (err: any) {
+    console.error('Erro ao salvar formulário de onboarding:', err);
+    return res.status(500).json({ error: err.message || 'Erro ao processar formulário.' });
+  }
+});
+
+// Atualizar status / dados do formulário
+app.patch('/api/onboarding-forms/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const forms = getOnboardingForms();
+    const index = forms.findIndex((f) => f.id === id);
+    if (index === -1) {
+      return res.status(404).json({ error: 'Formulário não encontrado.' });
+    }
+
+    const { syncToCard, ...updates } = req.body;
+
+    forms[index] = {
+      ...forms[index],
+      ...updates,
+      updatedAt: new Date().toISOString(),
+    };
+
+    writeJson(ONBOARDING_FORMS_FILE, forms);
+
+    // Se solicitado sincronizar com o cartão gerado ou se o cartão já foi criado
+    let cardUpdated = null;
+    if (syncToCard && (forms[index].generatedCardId || forms[index].generatedCardSlug)) {
+      const cards = readJson<any[]>(CARDS_FILE, []);
+      const cardIdx = cards.findIndex(
+        (c) => c.id === forms[index].generatedCardId || c.slug === forms[index].generatedCardSlug
+      );
+      if (cardIdx !== -1) {
+        if (updates.photoUrl !== undefined) {
+          cards[cardIdx].imageUrl = updates.photoUrl;
+        }
+        if (updates.logoUrl !== undefined) {
+          cards[cardIdx].companyLogoUrl = updates.logoUrl;
+          if (updates.logoUrl) {
+            cards[cardIdx].qrCodeIncludeLogo = true;
+          }
+        }
+        if (updates.fullName !== undefined) {
+          cards[cardIdx].name = updates.fullName;
+        }
+        if (updates.companyName !== undefined) {
+          cards[cardIdx].brandName = updates.companyName;
+        }
+        cards[cardIdx].updatedAt = new Date().toISOString();
+        writeJson(CARDS_FILE, cards);
+        notifyCardUpdate(cards[cardIdx], 'updated');
+        cardUpdated = cards[cardIdx];
+      }
+    }
+
+    return res.json({ success: true, form: forms[index], card: cardUpdated });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Erro ao atualizar formulário.' });
+  }
+});
+
+// Sincronizar imagens ou dados tratados do formulário de volta para o Cartão Digital gerado
+app.post('/api/onboarding-forms/:id/sync-to-card', (req, res) => {
+  try {
+    const { id } = req.params;
+    const forms = getOnboardingForms();
+    const form = forms.find((f) => f.id === id);
+    if (!form) {
+      return res.status(404).json({ error: 'Formulário não encontrado.' });
+    }
+
+    if (!form.generatedCardId && !form.generatedCardSlug) {
+      return res.status(400).json({ error: 'Este formulário ainda não possui um Cartão Digital gerado. Clique em "Gerar Cartão" primeiro.' });
+    }
+
+    const cards = readJson<any[]>(CARDS_FILE, []);
+    const cardIdx = cards.findIndex(
+      (c) => c.id === form.generatedCardId || c.slug === form.generatedCardSlug
+    );
+
+    if (cardIdx === -1) {
+      return res.status(404).json({ error: 'O Cartão Digital correspondente não foi encontrado no sistema.' });
+    }
+
+    const { photoUrl, logoUrl } = req.body;
+    const newPhoto = photoUrl !== undefined ? photoUrl : form.photoUrl;
+    const newLogo = logoUrl !== undefined ? logoUrl : form.logoUrl;
+
+    if (newPhoto !== undefined) {
+      cards[cardIdx].imageUrl = newPhoto;
+    }
+    if (newLogo !== undefined) {
+      cards[cardIdx].companyLogoUrl = newLogo;
+      if (newLogo) {
+        cards[cardIdx].qrCodeIncludeLogo = true;
+      }
+    }
+
+    cards[cardIdx].updatedAt = new Date().toISOString();
+    writeJson(CARDS_FILE, cards);
+    notifyCardUpdate(cards[cardIdx], 'updated');
+
+    // Atualiza também no formulário
+    const formIdx = forms.findIndex((f) => f.id === id);
+    if (formIdx !== -1) {
+      if (newPhoto !== undefined) forms[formIdx].photoUrl = newPhoto;
+      if (newLogo !== undefined) forms[formIdx].logoUrl = newLogo;
+      forms[formIdx].updatedAt = new Date().toISOString();
+      writeJson(ONBOARDING_FORMS_FILE, forms);
+    }
+
+    return res.json({
+      success: true,
+      message: 'Imagens e dados sincronizados com o Cartão Digital com sucesso!',
+      card: cards[cardIdx],
+      form: forms[formIdx],
+    });
+  } catch (err: any) {
+    console.error('Erro ao sincronizar dados com o cartão:', err);
+    return res.status(500).json({ error: err.message || 'Erro ao sincronizar com o cartão.' });
+  }
+});
+
+// Excluir formulário de onboarding
+app.delete('/api/onboarding-forms/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    let forms = getOnboardingForms();
+    forms = forms.filter((f) => f.id !== id);
+    writeJson(ONBOARDING_FORMS_FILE, forms);
+    return res.json({ success: true });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Erro ao excluir formulário.' });
+  }
+});
+
+// ⚡ GERAR CARTÃO INSTANTÂNEO COM 1-CLIQUE A PARTIR DO FORMULÁRIO DO CLIENTE
+app.post('/api/onboarding-forms/:id/convert-to-card', (req, res) => {
+  try {
+    const { id } = req.params;
+    const forms = getOnboardingForms();
+    const form = forms.find((f) => f.id === id);
+    if (!form) {
+      return res.status(404).json({ error: 'Formulário não encontrado.' });
+    }
+
+    const cards = readJson<any[]>(CARDS_FILE, []);
+
+    // Gera um slug elegante e único a partir do nome
+    const cleanName = (form.fullName || 'cliente')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+
+    let slug = cleanName;
+    let counter = 1;
+    while (cards.some((c) => c.slug === slug)) {
+      counter++;
+      slug = `${cleanName}-${counter}`;
+    }
+
+    // Configuração de temas visuais conforme preferência
+    let backgroundColor = '#12375B';
+    let buttonColor = '#1A7FBE';
+    let bodyColor = '#EAF1F7';
+    let contentColor = '#FFFFFF';
+    let qrFgColor = '#12375B';
+    let aiAgentBtnColor = '#0284c7';
+
+    switch (form.preferredTheme) {
+      case 'ouro_luxo':
+        backgroundColor = '#18181B';
+        buttonColor = '#D97706';
+        bodyColor = '#09090B';
+        contentColor = '#27272A';
+        qrFgColor = '#D97706';
+        aiAgentBtnColor = '#B45309';
+        break;
+      case 'esmeralda':
+        backgroundColor = '#064E3B';
+        buttonColor = '#059669';
+        bodyColor = '#ECFDF5';
+        contentColor = '#FFFFFF';
+        qrFgColor = '#064E3B';
+        aiAgentBtnColor = '#047857';
+        break;
+      case 'roxo_criativo':
+        backgroundColor = '#4C1D95';
+        buttonColor = '#7C3AED';
+        bodyColor = '#F5F3FF';
+        contentColor = '#FFFFFF';
+        qrFgColor = '#4C1D95';
+        aiAgentBtnColor = '#6D28D9';
+        break;
+      case 'vermelho_elegante':
+        backgroundColor = '#881337';
+        buttonColor = '#BE123C';
+        bodyColor = '#FFF1F2';
+        contentColor = '#FFFFFF';
+        qrFgColor = '#881337';
+        aiAgentBtnColor = '#9F1239';
+        break;
+      case 'rosa_moderno':
+        backgroundColor = '#831843';
+        buttonColor = '#DB2777';
+        bodyColor = '#FDF2F8';
+        contentColor = '#FFFFFF';
+        qrFgColor = '#831843';
+        aiAgentBtnColor = '#BE185D';
+        break;
+      case 'preto_minimalista':
+        backgroundColor = '#0F172A';
+        buttonColor = '#334155';
+        bodyColor = '#020617';
+        contentColor = '#1E293B';
+        qrFgColor = '#0F172A';
+        aiAgentBtnColor = '#475569';
+        break;
+      case 'azul_corporativo':
+      default:
+        backgroundColor = '#12375B';
+        buttonColor = '#1A7FBE';
+        bodyColor = '#EAF1F7';
+        contentColor = '#FFFFFF';
+        qrFgColor = '#12375B';
+        aiAgentBtnColor = '#0284c7';
+        break;
+    }
+
+    const newCard = {
+      id: Date.now(),
+      userId: 1,
+      slug,
+      name: form.fullName,
+      jobTitle: form.jobTitle,
+      brandName: form.companyName || form.fullName,
+      phone: form.secondaryPhone || form.whatsappPhone,
+      whatsappPhone: form.whatsappPhone,
+      email: form.email,
+      websiteUrl: form.websiteUrl || (form.customLinkUrl && form.customLinkUrl.startsWith('http') ? form.customLinkUrl : ''),
+      address: form.fullAddress || '',
+      city: form.city || '',
+      state: form.state || '',
+      country: 'Brasil',
+      summary: form.summaryBio || `${form.jobTitle || 'Profissional'} na ${form.companyName || 'Átomos Infinity'}.`,
+      instagramUrl: form.instagramHandle
+        ? form.instagramHandle.startsWith('http')
+          ? form.instagramHandle
+          : `https://instagram.com/${form.instagramHandle.replace('@', '').trim()}`
+        : '',
+      linkedinUrl: form.linkedinUrl || '',
+      facebookUrl: form.facebookUrl || '',
+      youtubeUrl: form.youtubeUrl || '',
+      
+      // Chave PIX e dados de pagamento configurados
+      ctaLabel: form.customLinkName || 'Falar no WhatsApp',
+      ctaUrl: form.customLinkUrl || (form.whatsappPhone ? `https://wa.me/55${form.whatsappPhone.replace(/\D/g, '')}` : ''),
+      footerText: `© ${new Date().getFullYear()} ${form.companyName || form.fullName}. Todos os direitos reservados.`,
+
+      // Cores e estilo gerados
+      appearanceTheme: form.preferredTheme || 'azul_corporativo',
+      backgroundColor,
+      headerOpacity: 100,
+      buttonColor,
+      bodyColor,
+      contentColor,
+      contentOpacity: 100,
+      supportTextColor: '',
+      summaryTextColor: '',
+      qrCodeTextColor: '',
+      qrCodeSectionBgColor: '',
+      fontFamily: 'sans',
+
+      // Assets
+      imageUrl: form.photoUrl || '',
+      companyLogoUrl: form.logoUrl || '',
+      contentBackgroundImageUrl: form.contentBackgroundUrl || '',
+      frameScale: 97,
+
+      // QR Code
+      qrCodeStyle: 'arredondado',
+      qrCodeForegroundColor: qrFgColor,
+      qrCodeBackgroundColor: '#FFFFFF',
+      qrCodeFrameStyle: 'none',
+      qrCodeFrameText: 'SCAN ME',
+      qrCodeIncludeLogo: Boolean(form.logoUrl),
+
+      // IA e PWA
+      siteAiAgentEnabled: true,
+      aiAgentUrl: form.whatsappPhone ? `https://wa.me/55${form.whatsappPhone.replace(/\D/g, '')}` : '',
+      aiAgentButtonText: 'Falar com Atendente Virtual',
+      aiAgentButtonColor: aiAgentBtnColor,
+      aiAgentGlowEnabled: true,
+      aiAgentGlowIntensity: 'medio',
+      mobileAppName: form.companyName || form.fullName,
+
+      // Gestão de Vencimento e Contato
+      billingCustomerName: form.fullName,
+      billingCustomerPhone: form.whatsappPhone,
+      billingPixKey: form.pixKey || '',
+      billingNotes: `Cadastrado via Formulário de Coleta de Clientes.\nVendedora responsável: ${form.salesRepName || 'Direto'} (${form.salesRepPhone || '-'}).\nNotas do cliente: ${form.notes || '-'}`,
+      billingCycle: 'degustacao',
+      billingDueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+
+      status: 'ativo',
+      inquiryEnabled: true,
+      trackingEnabled: true,
+      activityTrackingEnabled: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    cards.push(newCard);
+    writeJson(CARDS_FILE, cards);
+    notifyCardUpdate(newCard, 'created');
+
+    // Atualiza o formulário marcando como convertido
+    const formIndex = forms.findIndex((f) => f.id === id);
+    if (formIndex !== -1) {
+      forms[formIndex].status = 'convertido';
+      forms[formIndex].generatedCardId = newCard.id;
+      forms[formIndex].generatedCardSlug = newCard.slug;
+      forms[formIndex].convertedAt = new Date().toISOString();
+      forms[formIndex].updatedAt = new Date().toISOString();
+      writeJson(ONBOARDING_FORMS_FILE, forms);
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: `Cartão de ${newCard.name} gerado com sucesso!`,
+      card: newCard,
+      form: forms[formIndex] || form,
+    });
+  } catch (err: any) {
+    console.error('Erro ao converter formulário em cartão:', err);
+    return res.status(500).json({ error: err.message || 'Erro ao gerar cartão.' });
+  }
+});
+
+// Servir arquivos estáticos do diretório public e da galeria de wallpapers com prioridade máxima
+const publicDir = path.join(process.cwd(), 'public');
+const publicWallpapersDir = path.join(publicDir, 'wallpapers');
+if (!fs.existsSync(publicWallpapersDir)) {
+  fs.mkdirSync(publicWallpapersDir, { recursive: true });
+}
+
+// Rota explícita para entregar imagens da biblioteca com MIME type correto e sem cair no Vite SPA
+app.get('/wallpapers/:filename', (req, res) => {
+  const filename = path.basename(req.params.filename);
+  const filePath = path.join(publicWallpapersDir, filename);
+  if (fs.existsSync(filePath)) {
+    return res.sendFile(filePath);
+  }
+  return res.status(404).send('Imagem não encontrada na biblioteca.');
+});
+
+app.use('/wallpapers', express.static(publicWallpapersDir, {
+  maxAge: '7d',
+  immutable: true,
+}));
+
+app.use(express.static(publicDir));
 
 // ----------------------------------------------------
 // VITE MIDDLEWARE & SERVIDOR
