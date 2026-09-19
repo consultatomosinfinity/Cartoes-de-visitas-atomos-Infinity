@@ -27,6 +27,7 @@ import {
   Layers,
   Smartphone,
   Sparkles,
+  Star,
   Upload,
   Link as LinkIcon,
   Crosshair,
@@ -68,6 +69,8 @@ import { AdminUsersManager } from '../components/AdminUsersManager.tsx';
 import { WallpapersLibraryModal } from '../components/WallpapersLibraryModal.tsx';
 import { HelpCenterModal } from '../components/HelpCenterModal.tsx';
 import { ClientOnboardingFormsManager } from '../components/ClientOnboardingFormsManager.tsx';
+import { PixIcon } from '../components/PixIcon.tsx';
+import { PixPaymentModal } from '../components/PixPaymentModal.tsx';
 
 export const DigitalCardsManager: React.FC = () => {
   const { user, signOut, isConfigured, isMaster, isAdminOrMaster, role, plan } = useAuth();
@@ -90,6 +93,7 @@ export const DigitalCardsManager: React.FC = () => {
   const [resetting, setResetting] = useState(false);
   const [helpModalOpen, setHelpModalOpen] = useState(false);
   const [helpArticleId, setHelpArticleId] = useState<string | undefined>(undefined);
+  const [testPixModalOpen, setTestPixModalOpen] = useState(false);
 
   // Inicia no modo de edição do modelo da Landing Page se solicitado por URL
   useEffect(() => {
@@ -292,8 +296,13 @@ export const DigitalCardsManager: React.FC = () => {
       whatsappPhone: '',
       websiteUrl: '',
       address: '',
+      addressNumber: '',
+      postalCode: '',
       city: '',
       state: '',
+      country: 'Brasil',
+      googleMapsUrl: '',
+      googleReviewUrl: '',
       summary: '',
       aiAgentUrl: '',
       aiAgentButtonText: 'Atendente Virtual',
@@ -527,6 +536,16 @@ export const DigitalCardsManager: React.FC = () => {
         'digital_card_synced',
         JSON.stringify({ slug: card.slug, timestamp: Date.now(), card })
       );
+
+      const raw = localStorage.getItem('atomos_digital_cards');
+      const list = raw ? JSON.parse(raw) : [];
+      const idx = list.findIndex((c: any) => c.id === card.id || c.slug === card.slug);
+      if (idx !== -1) {
+        list[idx] = card;
+      } else {
+        list.unshift(card);
+      }
+      localStorage.setItem('atomos_digital_cards', JSON.stringify(list));
     } catch (e) {}
   };
 
@@ -588,21 +607,40 @@ export const DigitalCardsManager: React.FC = () => {
 
   const handleOpenPublicPage = async (e: React.MouseEvent, slug: string) => {
     e.preventDefault();
-    if (editingCard && !isNew && editingCard.id) {
+
+    // Identifica o cartão correto para transmissão prévia
+    const targetCard = (editingCard && editingCard.slug === slug)
+      ? editingCard
+      : (cards.find((c) => c.slug === slug) || editingCard);
+
+    if (targetCard) {
+      broadcastCardUpdate(targetCard);
+    }
+
+    if (editingCard && editingCard.slug === slug && !isNew && editingCard.id) {
       try {
-        const res = await fetch(`/api/cards/${editingCard.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(editingCard),
-        });
-        if (res.ok) {
-          const updated = await res.json();
-          broadcastCardUpdate(updated);
+        if (user) {
+          const client = await initSupabase();
+          if (client && typeof editingCard.id === 'number') {
+            const dbPayload = mapDigitalCardToDb(editingCard, user.id);
+            await client.from('digital_cards').update(dbPayload).eq('id', editingCard.id);
+          }
+        } else {
+          const res = await fetch(`/api/cards/${editingCard.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(editingCard),
+          });
+          if (res.ok) {
+            const updated = await res.json();
+            broadcastCardUpdate(updated);
+          }
         }
       } catch (err) {
-        console.error('Erro ao salvar antes de abrir:', err);
+        console.warn('Auto-save antes de abrir concluído com fallback:', err);
       }
     }
+
     const targetName = `digital_card_public_${slug.replace(/[^a-zA-Z0-9_]/g, '_')}`;
     const win = window.open(`/cartao/${slug}?_t=${Date.now()}`, targetName);
     if (win && !win.closed) {
@@ -2274,13 +2312,21 @@ export const DigitalCardsManager: React.FC = () => {
                     >
                       <div className="flex items-center gap-2">
                         <Phone size={16} className="text-sky-600 dark:text-sky-400" />
-                        <span>3. Canais de Contato</span>
+                        <span>3. Canais de Contato & Pagamento PIX</span>
                       </div>
-                      {activeAccordion === 3 ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                      <div className="flex items-center gap-2">
+                        {editingCard.pixKey && (
+                          <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-100 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800">
+                            <PixIcon size={10} color="currentColor" />
+                            PIX Ativo
+                          </span>
+                        )}
+                        {activeAccordion === 3 ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                      </div>
                     </button>
 
                     {activeAccordion === 3 && (
-                      <div className="p-4 space-y-3 bg-white dark:bg-slate-900/40">
+                      <div className="p-4 space-y-4 bg-white dark:bg-slate-900/40">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div>
                             <label className="block text-[11px] font-bold text-slate-600 mb-1">WhatsApp</label>
@@ -2327,6 +2373,156 @@ export const DigitalCardsManager: React.FC = () => {
                           </div>
                         </div>
 
+                        {/* Bloco de Configuração do PIX */}
+                        <div className="pt-3 border-t border-slate-200 dark:border-slate-700">
+                          <div className="p-3.5 rounded-2xl bg-teal-50/60 dark:bg-teal-950/20 border border-teal-200/80 dark:border-teal-800/60 space-y-3">
+                            <div className="flex items-center justify-between flex-wrap gap-2">
+                              <div className="flex items-center gap-2">
+                                <div className="w-7 h-7 rounded-lg bg-teal-600 text-white flex items-center justify-center shadow-xs">
+                                  <PixIcon size={16} color="#FFFFFF" />
+                                </div>
+                                <div>
+                                  <div className="text-xs font-bold text-teal-900 dark:text-teal-200 flex items-center gap-1.5">
+                                    Chave PIX & Pagamento Rápido no Cartão
+                                    {editingCard.pixKey && (
+                                      <span className="text-[10px] font-semibold text-teal-700 dark:text-teal-400 bg-teal-100 dark:bg-teal-900/60 px-2 py-0.5 rounded-full">
+                                        Configurado
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="text-[10px] text-teal-700 dark:text-teal-400">
+                                    Adiciona o botão PIX no cartão para clientes pagarem via QR Code instantâneo
+                                  </div>
+                                </div>
+                              </div>
+
+                              {editingCard.pixKey && (
+                                <button
+                                  type="button"
+                                  onClick={() => setTestPixModalOpen(true)}
+                                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-bold shadow-xs transition-colors cursor-pointer"
+                                >
+                                  <QrCode size={13} />
+                                  <span>Testar QR Code PIX</span>
+                                </button>
+                              )}
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                              <div>
+                                <label className="block text-[11px] font-bold text-teal-900 dark:text-teal-300 mb-1">
+                                  Tipo de Chave PIX
+                                </label>
+                                <select
+                                  value={editingCard.pixType || 'telefone'}
+                                  onChange={(e) => setEditingCard({ ...editingCard, pixType: e.target.value as any })}
+                                  className="w-full px-3 py-2 text-xs rounded-xl border border-teal-200 dark:border-teal-800 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                >
+                                  <option value="telefone">Celular / Telefone</option>
+                                  <option value="email">E-mail</option>
+                                  <option value="cpf">CPF</option>
+                                  <option value="cnpj">CNPJ</option>
+                                  <option value="aleatoria">Chave Aleatória (EVP)</option>
+                                </select>
+                              </div>
+
+                              <div className="sm:col-span-2">
+                                <div className="flex items-center justify-between mb-1">
+                                  <label className="block text-[11px] font-bold text-teal-900 dark:text-teal-300">
+                                    Chave PIX
+                                  </label>
+                                  <div className="flex items-center gap-2">
+                                    {editingCard.whatsappPhone && (
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setEditingCard({
+                                            ...editingCard,
+                                            pixKey: editingCard.whatsappPhone,
+                                            pixType: 'telefone',
+                                          })
+                                        }
+                                        className="text-[10px] text-teal-700 hover:text-teal-800 dark:text-teal-400 font-semibold underline cursor-pointer"
+                                      >
+                                        Usar WhatsApp
+                                      </button>
+                                    )}
+                                    {editingCard.email && (
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setEditingCard({
+                                            ...editingCard,
+                                            pixKey: editingCard.email,
+                                            pixType: 'email',
+                                          })
+                                        }
+                                        className="text-[10px] text-teal-700 hover:text-teal-800 dark:text-teal-400 font-semibold underline cursor-pointer"
+                                      >
+                                        Usar E-mail
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                                <input
+                                  type="text"
+                                  value={editingCard.pixKey || ''}
+                                  onChange={(e) => setEditingCard({ ...editingCard, pixKey: e.target.value })}
+                                  placeholder="Ex: 15996259353, contato@empresa.com ou 123.456.789-00"
+                                  className="w-full px-3 py-2 text-xs rounded-xl border border-teal-200 dark:border-teal-800 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-[11px] font-bold text-teal-900 dark:text-teal-300 mb-1">
+                                  Nome do Titular / Favorecido (Opcional)
+                                </label>
+                                <input
+                                  type="text"
+                                  value={editingCard.pixBeneficiary || ''}
+                                  onChange={(e) => setEditingCard({ ...editingCard, pixBeneficiary: e.target.value })}
+                                  placeholder={editingCard.name || 'Ex: Jurandir Hora'}
+                                  className="w-full px-3 py-2 text-xs rounded-xl border border-teal-200 dark:border-teal-800 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[11px] font-bold text-teal-900 dark:text-teal-300 mb-1">
+                                  Cidade do Titular (Opcional)
+                                </label>
+                                <input
+                                  type="text"
+                                  value={editingCard.pixCity || ''}
+                                  onChange={(e) => setEditingCard({ ...editingCard, pixCity: e.target.value })}
+                                  placeholder={editingCard.city || 'Ex: Sorocaba'}
+                                  className="w-full px-3 py-2 text-xs rounded-xl border border-teal-200 dark:border-teal-800 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                />
+                              </div>
+                            </div>
+
+                            {editingCard.pixKey && (
+                              <div className="pt-1 flex items-center justify-between text-[11px] text-teal-800 dark:text-teal-300">
+                                <span>O botão PIX aparecerá automaticamente nos canais de contato do cartão.</span>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setEditingCard({
+                                      ...editingCard,
+                                      pixKey: '',
+                                      pixBeneficiary: '',
+                                      pixCity: '',
+                                    })
+                                  }
+                                  className="text-red-500 hover:text-red-700 dark:text-red-400 text-[10px] font-semibold underline cursor-pointer"
+                                >
+                                  Remover PIX do Cartão
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
                         {/* Atalho de Visibilidade do Formulário Enviar uma mensagem */}
                         <div className="pt-3 border-t border-slate-200 dark:border-slate-700">
                           <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700">
@@ -2363,7 +2559,7 @@ export const DigitalCardsManager: React.FC = () => {
                     )}
                   </div>
 
-                  {/* ACORDEÃO 4: LOCALIZAÇÃO */}
+                  {/* ACORDEÃO 4: LOCALIZAÇÃO & AVALIAÇÕES GOOGLE */}
                   <div className="border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden">
                     <button
                       type="button"
@@ -2372,56 +2568,277 @@ export const DigitalCardsManager: React.FC = () => {
                     >
                       <div className="flex items-center gap-2">
                         <MapPin size={16} className="text-sky-600 dark:text-sky-400" />
-                        <span>4. Endereço e Localização</span>
+                        <span>4. Endereço, Localização & Avaliações no Google Maps</span>
                       </div>
-                      {activeAccordion === 4 ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                      <div className="flex items-center gap-2">
+                        {editingCard.googleReviewUrl && (
+                          <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                            <Star size={10} className="fill-amber-500 text-amber-500" />
+                            Avaliações Ativas
+                          </span>
+                        )}
+                        {activeAccordion === 4 ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                      </div>
                     </button>
 
                     {activeAccordion === 4 && (
-                      <div className="p-4 space-y-3 bg-white dark:bg-slate-900/40">
+                      <div className="p-4 space-y-4 bg-white dark:bg-slate-900/40">
+                        {/* Logradouro e Número */}
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                           <div className="sm:col-span-2">
-                            <label className="block text-[11px] font-bold text-slate-600 mb-1">Endereço</label>
+                            <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1">
+                              Endereço (Rua, Avenida, Praça)
+                            </label>
                             <input
                               type="text"
                               value={editingCard.address || ''}
                               onChange={(e) => setEditingCard({ ...editingCard, address: e.target.value })}
-                              placeholder="Av. Paulista"
-                              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                              placeholder="Ex: Av. Paulista ou Rua das Flores"
+                              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500"
                             />
                           </div>
                           <div>
-                            <label className="block text-[11px] font-bold text-slate-600 mb-1">Número</label>
+                            <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1">
+                              Número / Sala
+                            </label>
                             <input
                               type="text"
                               value={editingCard.addressNumber || ''}
                               onChange={(e) => setEditingCard({ ...editingCard, addressNumber: e.target.value })}
-                              placeholder="1000"
-                              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                              placeholder="Ex: 1000, Sala 42"
+                              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500"
                             />
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {/* CEP, Cidade, Estado e País */}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                           <div>
-                            <label className="block text-[11px] font-bold text-slate-600 mb-1">Cidade</label>
+                            <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1">
+                              CEP / Código Postal
+                            </label>
+                            <input
+                              type="text"
+                              value={editingCard.postalCode || ''}
+                              onChange={(e) => setEditingCard({ ...editingCard, postalCode: e.target.value })}
+                              placeholder="Ex: 01310-100"
+                              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1">
+                              Cidade
+                            </label>
                             <input
                               type="text"
                               value={editingCard.city || ''}
                               onChange={(e) => setEditingCard({ ...editingCard, city: e.target.value })}
-                              placeholder="São Paulo"
-                              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                              placeholder="Ex: São Paulo"
+                              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500"
                             />
                           </div>
                           <div>
-                            <label className="block text-[11px] font-bold text-slate-600 mb-1">Estado</label>
+                            <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1">
+                              Estado (UF)
+                            </label>
                             <input
                               type="text"
                               value={editingCard.state || ''}
                               onChange={(e) => setEditingCard({ ...editingCard, state: e.target.value })}
-                              placeholder="SP"
-                              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                              placeholder="Ex: SP"
+                              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500"
                             />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1">
+                              País
+                            </label>
+                            <input
+                              type="text"
+                              value={editingCard.country || 'Brasil'}
+                              onChange={(e) => setEditingCard({ ...editingCard, country: e.target.value })}
+                              placeholder="Ex: Brasil"
+                              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                            />
+                          </div>
+                        </div>
+
+                        {/* LINK EXATO DO GOOGLE MAPS / WAZE */}
+                        <div className="p-3.5 rounded-xl border border-sky-200 dark:border-sky-900/60 bg-sky-50/50 dark:bg-sky-950/20 space-y-2.5">
+                          <div className="flex items-center justify-between flex-wrap gap-2">
+                            <label className="flex items-center gap-1.5 text-xs font-bold text-sky-900 dark:text-sky-300">
+                              <MapPin size={15} className="text-sky-600 dark:text-sky-400" />
+                              <span>Link Direto do Google Maps / Traçar Rota</span>
+                            </label>
+                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-sky-100 dark:bg-sky-900 text-sky-800 dark:text-sky-200">
+                              Para abrir o GPS do cliente
+                            </span>
+                          </div>
+
+                          <div className="relative">
+                            <input
+                              type="url"
+                              value={editingCard.googleMapsUrl || ''}
+                              onChange={(e) => setEditingCard({ ...editingCard, googleMapsUrl: e.target.value })}
+                              placeholder="https://maps.app.goo.gl/... ou https://maps.google.com/?cid=..."
+                              className="w-full pl-3 pr-8 py-2 text-xs rounded-xl border border-sky-300 dark:border-sky-800 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                            />
+                            {editingCard.googleMapsUrl && (
+                              <button
+                                type="button"
+                                onClick={() => setEditingCard({ ...editingCard, googleMapsUrl: '' })}
+                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                                title="Limpar link do Maps"
+                              >
+                                <X size={14} />
+                              </button>
+                            )}
+                          </div>
+
+                          <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                            💡 <strong>Dica de ouro:</strong> Abra o aplicativo do Google Maps, encontre sua empresa, clique em <strong>"Compartilhar"</strong> e copie o link gerado (ex: <code className="px-1 py-0.5 bg-white dark:bg-slate-800 rounded text-sky-700 dark:text-sky-300 font-mono text-[10px]">https://maps.app.goo.gl/...</code>).
+                          </p>
+
+                          <div className="flex items-center gap-2 pt-1 flex-wrap">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const direct = (editingCard.googleMapsUrl || '').trim();
+                                if (direct) {
+                                  const fullUrl = direct.startsWith('http') ? direct : `https://${direct}`;
+                                  window.open(fullUrl, '_blank', 'noopener,noreferrer');
+                                } else {
+                                  const parts = [
+                                    editingCard.address,
+                                    editingCard.addressNumber,
+                                    editingCard.city,
+                                    editingCard.state,
+                                    editingCard.country || 'Brasil',
+                                  ].filter(Boolean);
+                                  if (parts.length > 0) {
+                                    window.open(`https://maps.google.com/?q=${encodeURIComponent(parts.join(', '))}`, '_blank', 'noopener,noreferrer');
+                                  }
+                                }
+                              }}
+                              disabled={!editingCard.googleMapsUrl && !editingCard.address && !editingCard.city}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-sky-600 hover:bg-sky-700 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer shadow-xs"
+                            >
+                              <ExternalLink size={13} />
+                              <span>Testar no Google Maps</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const parts = [
+                                  editingCard.address,
+                                  editingCard.addressNumber,
+                                  editingCard.city,
+                                  editingCard.state,
+                                  editingCard.country || 'Brasil',
+                                ].filter(Boolean);
+                                if (parts.length > 0) {
+                                  const generatedUrl = `https://maps.google.com/?q=${encodeURIComponent(parts.join(', '))}`;
+                                  setEditingCard({ ...editingCard, googleMapsUrl: generatedUrl });
+                                }
+                              }}
+                              disabled={!editingCard.address && !editingCard.city}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                            >
+                              <Sparkles size={13} className="text-amber-500" />
+                              <span>Gerar link pelo endereço digitado</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* NOVO RECURSO: LINK DIRETO PARA AVALIAÇÃO NO GOOGLE (5 ESTRELAS) */}
+                        <div className="p-3.5 rounded-xl border border-amber-300 dark:border-amber-800/80 bg-amber-50/70 dark:bg-amber-950/30 space-y-2.5">
+                          <div className="flex items-center justify-between flex-wrap gap-2">
+                            <label className="flex items-center gap-1.5 text-xs font-bold text-amber-900 dark:text-amber-300">
+                              <Star size={15} className="text-amber-500 fill-amber-500" />
+                              <span>Link Direto de Avaliação no Google Maps (5 Estrelas)</span>
+                            </label>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-200/80 dark:bg-amber-900/90 text-amber-900 dark:text-amber-200 flex items-center gap-1">
+                              <span>⭐</span> Abre Janela Direta de Avaliação
+                            </span>
+                          </div>
+
+                          <div className="relative">
+                            <input
+                              type="url"
+                              value={editingCard.googleReviewUrl || ''}
+                              onChange={(e) => setEditingCard({ ...editingCard, googleReviewUrl: e.target.value })}
+                              placeholder="Ex: https://g.page/r/.../review ou https://search.google.com/local/writereview?placeid=..."
+                              className="w-full pl-3 pr-8 py-2 text-xs rounded-xl border border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                            />
+                            {editingCard.googleReviewUrl && (
+                              <button
+                                type="button"
+                                onClick={() => setEditingCard({ ...editingCard, googleReviewUrl: '' })}
+                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                                title="Limpar link de avaliação"
+                              >
+                                <X size={14} />
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="text-[11px] text-slate-600 dark:text-slate-300 space-y-2 bg-amber-100/50 dark:bg-amber-900/20 p-3 rounded-xl border border-amber-200/60 dark:border-amber-800/40 leading-relaxed">
+                            <p className="font-bold text-amber-950 dark:text-amber-200 flex items-center gap-1.5 text-xs">
+                              <span>🌟</span>
+                              <span>Como pegar o link oficial de avaliação no Google da sua empresa:</span>
+                            </p>
+                            <ol className="list-decimal pl-4 space-y-1.5 text-[11px] text-slate-700 dark:text-slate-200">
+                              <li>
+                                <strong>Acesse o Google Busca</strong> e pesquise exatamente pelo nome da sua empresa (Ex: <code className="px-1.5 py-0.5 bg-white dark:bg-slate-800 rounded font-mono text-[10px] text-amber-900 dark:text-amber-300 border border-amber-200 dark:border-amber-800">Átomos Eletrotécnica Sorocaba</code>).
+                              </li>
+                              <li>
+                                Se você estiver conectado no e-mail que gerencia a empresa, aparecerá o painel de controle administrativo <strong>"Sua empresa no Google"</strong> no topo da página.
+                              </li>
+                              <li>
+                                Clique no botão <strong>"Solicitar avaliações"</strong> (ele possui o ícone de um balão de conversa com um coração 💬❤️).
+                              </li>
+                              <li>
+                                Uma janela se abrirá com o link curto oficial de avaliação para você copiar (ex: <code className="px-1 py-0.5 bg-white dark:bg-slate-800 rounded font-mono text-[10px] text-amber-900 dark:text-amber-300">https://g.page/r/.../review</code>) e colar no campo acima.
+                              </li>
+                            </ol>
+                            <p className="text-[10.5px] text-slate-500 dark:text-slate-400 pt-0.5 border-t border-amber-200/50 dark:border-amber-800/30">
+                              ✨ <strong>Resultado:</strong> Quando seu cliente clicar no botão do cartão, a janela abrirá diretamente com o formulário de 5 estrelas pronto para avaliação.
+                            </p>
+                          </div>
+
+                          <div className="flex items-center gap-2 pt-1 flex-wrap">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const direct = (editingCard.googleReviewUrl || '').trim();
+                                if (direct) {
+                                  const fullUrl = direct.startsWith('http') ? direct : `https://${direct}`;
+                                  window.open(fullUrl, '_blank', 'noopener,noreferrer');
+                                }
+                              }}
+                              disabled={!editingCard.googleReviewUrl}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-950 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer shadow-xs"
+                            >
+                              <Star size={13} className="fill-slate-950" />
+                              <span>Testar Janela de Avaliação ⭐</span>
+                            </button>
+
+                            {editingCard.googleMapsUrl && !editingCard.googleReviewUrl && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const maps = (editingCard.googleMapsUrl || '').trim();
+                                  if (maps) {
+                                    setEditingCard({ ...editingCard, googleReviewUrl: maps });
+                                  }
+                                }}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-800 hover:bg-amber-50 dark:hover:bg-slate-700 text-amber-900 dark:text-amber-200 transition-colors cursor-pointer"
+                              >
+                                <Sparkles size={13} className="text-amber-500" />
+                                <span>Usar link do Maps como base</span>
+                              </button>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -5308,6 +5725,20 @@ export const DigitalCardsManager: React.FC = () => {
             }
           }}
         />
+
+        {/* Modal de Teste/Prévia do PIX */}
+        {editingCard && (
+          <PixPaymentModal
+            isOpen={testPixModalOpen}
+            onClose={() => setTestPixModalOpen(false)}
+            pixKey={editingCard.pixKey || ''}
+            pixType={editingCard.pixType}
+            pixBeneficiary={editingCard.pixBeneficiary || editingCard.name || ''}
+            pixCity={editingCard.pixCity || editingCard.city || 'Brasil'}
+            cardName={editingCard.name}
+            headerColor={editingCard.backgroundColor || '#0f766e'}
+          />
+        )}
       </div>
     </div>
   );

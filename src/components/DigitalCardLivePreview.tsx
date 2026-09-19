@@ -17,6 +17,7 @@ import {
   Battery,
   ChevronDown,
   Sparkles,
+  Star,
   Send,
 } from 'lucide-react';
 import { DigitalCard } from '../types.ts';
@@ -24,6 +25,9 @@ import { getContrastTextColor, isConfiguredLink, hexToRgba, getCardContentContra
 import { parseAiAgentInput, getAiAgentButtonGlowClass, getAiAgentButtonPaddingY } from '../../shared/digital-card-ai-agent.ts';
 import { DigitalCardDualPorthole } from './DigitalCardDualPorthole.tsx';
 import { DigitalCardQrCode } from './DigitalCardQrCode.tsx';
+import { PixIcon } from './PixIcon.tsx';
+import { PixPaymentModal } from './PixPaymentModal.tsx';
+import { formatPixKeyForDisplay } from '../utils/pix.ts';
 
 export type DeviceModel =
   | 'iphone-18-pro-max'
@@ -251,6 +255,7 @@ export const DigitalCardLivePreview: React.FC<DigitalCardLivePreviewProps> = ({ 
   const [selectedDeviceId, setSelectedDeviceId] = useState<DeviceModel>('iphone-18-pro-max');
   const [brandFilter, setBrandFilter] = useState<'all' | 'Apple' | 'Samsung'>('all');
   const [isSelectorOpen, setIsSelectorOpen] = useState(false);
+  const [isPixModalOpen, setIsPixModalOpen] = useState(false);
 
   const headerTextColor = getContrastTextColor(card.backgroundColor || '#12375B');
   const actionButtonTextColor = getContrastTextColor(card.buttonColor || '#1A7FBE');
@@ -304,7 +309,9 @@ export const DigitalCardLivePreview: React.FC<DigitalCardLivePreviewProps> = ({ 
     (card.city && card.city.trim()) ||
     isConfiguredLink(card.googleMapsUrl)
   );
-  const hasContacts = hasWhatsapp || hasPhone || hasEmail || hasWebsite || hasAddress;
+  const hasGoogleReview = isConfiguredLink(card.googleReviewUrl);
+  const hasPix = Boolean(card.pixKey && card.pixKey.trim());
+  const hasContacts = hasWhatsapp || hasPhone || hasEmail || hasWebsite || hasAddress || hasGoogleReview || hasPix;
 
   const hasInstagram = isConfiguredLink(card.instagramUrl);
   const hasLinkedin = isConfiguredLink(card.linkedinUrl);
@@ -790,16 +797,16 @@ export const DigitalCardLivePreview: React.FC<DigitalCardLivePreviewProps> = ({ 
                 const isNeu = isNeumorphismTheme(card.appearanceTheme);
                 const isNeuDark = card.appearanceTheme === 'neumorphism_dark';
                 const neuStyles = getNeumorphicCardStyles(isNeuDark);
-                const itemBg = isNeu ? neuStyles.bg : undefined;
+                const itemBg = isNeu ? neuStyles.bg : (contentContrast.isDarkBg ? 'rgba(255, 255, 255, 0.08)' : '#F8FAFC');
                 const itemShadow = isNeu ? neuStyles.raisedSubtle : undefined;
-                const itemBorder = isNeu ? neuStyles.border : undefined;
-                const itemColor = isNeu ? neuStyles.textColor : undefined;
+                const itemBorder = isNeu ? neuStyles.border : (contentContrast.isDarkBg ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid rgba(0, 0, 0, 0.05)');
+                const itemColor = isNeu ? neuStyles.textColor : (contentContrast.isDarkBg ? '#F8FAFC' : '#1E293B');
 
                 return (
                   <div className="px-3.5 py-3 flex flex-col gap-2 border-t border-slate-100/50">
                     {hasWhatsapp && (
                       <div
-                        className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 text-xs transition-all"
+                        className="flex items-center gap-2 p-2 rounded-xl text-xs transition-all"
                         style={{ backgroundColor: itemBg, boxShadow: itemShadow, border: itemBorder, color: itemColor }}
                       >
                         <MessageCircle size={14} className="text-emerald-500 shrink-0" />
@@ -808,7 +815,7 @@ export const DigitalCardLivePreview: React.FC<DigitalCardLivePreviewProps> = ({ 
                     )}
                     {hasPhone && (
                       <div
-                        className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 text-xs transition-all"
+                        className="flex items-center gap-2 p-2 rounded-xl text-xs transition-all"
                         style={{ backgroundColor: itemBg, boxShadow: itemShadow, border: itemBorder, color: itemColor }}
                       >
                         <Phone size={14} className="text-blue-500 shrink-0" />
@@ -817,7 +824,7 @@ export const DigitalCardLivePreview: React.FC<DigitalCardLivePreviewProps> = ({ 
                     )}
                     {hasEmail && (
                       <div
-                        className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 text-xs transition-all"
+                        className="flex items-center gap-2 p-2 rounded-xl text-xs transition-all"
                         style={{ backgroundColor: itemBg, boxShadow: itemShadow, border: itemBorder, color: itemColor }}
                       >
                         <Mail size={14} className="text-indigo-500 shrink-0" />
@@ -826,7 +833,7 @@ export const DigitalCardLivePreview: React.FC<DigitalCardLivePreviewProps> = ({ 
                     )}
                     {hasWebsite && (
                       <div
-                        className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 text-xs transition-all"
+                        className="flex items-center gap-2 p-2 rounded-xl text-xs transition-all"
                         style={{ backgroundColor: itemBg, boxShadow: itemShadow, border: itemBorder, color: itemColor }}
                       >
                         <Globe size={14} className="text-sky-500 shrink-0" />
@@ -835,14 +842,78 @@ export const DigitalCardLivePreview: React.FC<DigitalCardLivePreviewProps> = ({ 
                     )}
                     {hasAddress && (
                       <div
-                        className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 text-xs transition-all"
+                        className="flex items-center gap-2 p-2 rounded-xl text-xs transition-all"
                         style={{ backgroundColor: itemBg, boxShadow: itemShadow, border: itemBorder, color: itemColor }}
                       >
                         <MapPin size={14} className="text-rose-500 shrink-0" />
                         <span className="truncate font-medium">
-                          {[card.address, card.city].filter(Boolean).join(', ')}
+                          {[card.address, card.addressNumber, card.city, card.state].filter(Boolean).join(', ') || 'Localização no Google Maps'}
                         </span>
                       </div>
+                    )}
+                    {hasGoogleReview && (
+                      <div
+                        className="flex items-center justify-between gap-2 p-2 rounded-xl text-xs transition-all"
+                        style={{
+                          backgroundColor: isNeu ? itemBg : (contentContrast.isDarkBg ? 'rgba(245, 158, 11, 0.15)' : '#FEF3C7'),
+                          boxShadow: itemShadow,
+                          border: isNeu ? itemBorder : (contentContrast.isDarkBg ? '1px solid rgba(245, 158, 11, 0.3)' : '1px solid #FCD34D'),
+                          color: itemColor,
+                        }}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="w-5 h-5 rounded-md bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                            <Star size={11} className="fill-white text-white" />
+                          </div>
+                          <div className="min-w-0">
+                            <span
+                              className="truncate font-bold block text-[11px]"
+                              style={{ color: isNeu ? itemColor : (contentContrast.isDarkBg ? '#FDE68A' : '#78350F') }}
+                            >
+                              Avaliar no Google
+                            </span>
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-bold text-white bg-amber-500 px-2 py-0.5 rounded-md shrink-0 shadow-2xs">
+                          Avaliar ↗
+                        </span>
+                      </div>
+                    )}
+                    {hasPix && (
+                      <button
+                        type="button"
+                        onClick={() => setIsPixModalOpen(true)}
+                        className="w-full flex items-center justify-between gap-2 p-2 rounded-xl text-xs transition-all shadow-2xs text-left cursor-pointer group"
+                        style={{
+                          backgroundColor: isNeu ? itemBg : (contentContrast.isDarkBg ? 'rgba(13, 148, 136, 0.15)' : '#F0FDFA'),
+                          boxShadow: itemShadow,
+                          border: isNeu ? itemBorder : (contentContrast.isDarkBg ? '1px solid rgba(13, 148, 136, 0.35)' : '1px solid #99F6E4'),
+                          color: itemColor,
+                        }}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="w-5 h-5 rounded-md bg-teal-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                            <PixIcon size={12} color="#FFFFFF" />
+                          </div>
+                          <div className="min-w-0">
+                            <span
+                              className="truncate font-bold block text-[11px]"
+                              style={{ color: isNeu ? itemColor : (contentContrast.isDarkBg ? '#5EEAD4' : '#115E59') }}
+                            >
+                              Pagar via PIX
+                            </span>
+                            <span
+                              className="text-[10px] font-mono truncate block font-semibold"
+                              style={{ color: isNeu ? itemColor : (contentContrast.isDarkBg ? '#F0FDFA' : '#0F172A') }}
+                            >
+                              {formatPixKeyForDisplay(card.pixKey || '', card.pixType) || card.pixKey}
+                            </span>
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-bold text-white bg-teal-600 group-hover:bg-teal-700 px-2 py-0.5 rounded-md shrink-0 shadow-2xs">
+                          QR Code ↗
+                        </span>
+                      </button>
                     )}
                   </div>
                 );
@@ -1116,6 +1187,18 @@ export const DigitalCardLivePreview: React.FC<DigitalCardLivePreviewProps> = ({ 
           </div>
         </div>
       </div>
+
+      {/* Modal Interativo de Pagamento PIX no Preview */}
+      <PixPaymentModal
+        isOpen={isPixModalOpen}
+        onClose={() => setIsPixModalOpen(false)}
+        pixKey={card.pixKey || ''}
+        pixType={card.pixType}
+        pixBeneficiary={card.pixBeneficiary || card.name}
+        pixCity={card.pixCity || card.city || 'Brasil'}
+        cardName={card.name}
+        headerColor={card.backgroundColor || '#0f766e'}
+      />
     </div>
   );
 };

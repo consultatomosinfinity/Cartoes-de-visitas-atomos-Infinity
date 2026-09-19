@@ -18,8 +18,10 @@ import {
   AlertCircle,
   CheckCircle2,
   Sparkles,
+  Star,
 } from 'lucide-react';
 import { DigitalCard } from '../types.ts';
+import { initSupabase, mapDbToDigitalCard } from '../lib/supabase.ts';
 import { parseAiAgentInput, getAiAgentButtonGlowClass, getAiAgentButtonPaddingY } from '../../shared/digital-card-ai-agent.ts';
 import { getContrastTextColor, isConfiguredLink, hexToRgba, getCardContentContrastColors, isNeumorphismTheme, getNeumorphicCardStyles, isGlassmorphismTheme, getGlassmorphicCardStyles } from '../../shared/digital-card-appearance.ts';
 import { downloadVCard } from '../../shared/digital-card-vcf.ts';
@@ -27,7 +29,92 @@ import { DigitalCardDualPorthole } from '../components/DigitalCardDualPorthole.t
 import { DigitalCardQrCode } from '../components/DigitalCardQrCode.tsx';
 import { DigitalCardPwaInstall } from '../components/DigitalCardPwaInstall.tsx';
 import { AiAgentModal } from '../components/AiAgentModal.tsx';
+import { PixPaymentModal } from '../components/PixPaymentModal.tsx';
+import { PixIcon } from '../components/PixIcon.tsx';
+import { formatPixKeyForDisplay } from '../utils/pix.ts';
 import { buildWhatsAppUrl, sanitizeWhatsAppText } from '../utils/whatsapp.ts';
+
+// Utilitários para URLs diretas (dispensam redirecionamento intermediário do servidor e evitam erro de cartão não encontrado)
+const getWhatsAppDirectUrl = (phone?: string | null): string => {
+  if (!phone) return '#';
+  let cleanPhone = phone.replace(/\D/g, '');
+  if (!cleanPhone) return '#';
+  if (!cleanPhone.startsWith('55') && (cleanPhone.length === 10 || cleanPhone.length === 11)) {
+    cleanPhone = `55${cleanPhone}`;
+  }
+  return `https://wa.me/${cleanPhone}`;
+};
+
+const getExternalDirectUrl = (url?: string | null): string => {
+  if (!url) return '#';
+  const trimmed = url.trim();
+  if (!trimmed) return '#';
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed}`;
+};
+
+const getMapsDirectUrl = (cardData: DigitalCard): string => {
+  if (cardData.googleMapsUrl && cardData.googleMapsUrl.trim()) {
+    return getExternalDirectUrl(cardData.googleMapsUrl);
+  }
+  const parts = [
+    cardData.address,
+    cardData.addressNumber,
+    cardData.city,
+    cardData.state,
+    cardData.country,
+  ].filter(Boolean);
+  if (parts.length > 0) {
+    return `https://maps.google.com/?q=${encodeURIComponent(parts.join(', '))}`;
+  }
+  return '#';
+};
+
+const getGoogleReviewDirectUrl = (cardData: DigitalCard): string => {
+  if (cardData.googleReviewUrl && cardData.googleReviewUrl.trim()) {
+    return getExternalDirectUrl(cardData.googleReviewUrl);
+  }
+  return '#';
+};
+
+const getInstagramDirectUrl = (url?: string | null): string => {
+  if (!url) return '#';
+  let trimmed = url.trim();
+  if (!trimmed) return '#';
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  if (trimmed.startsWith('@')) trimmed = trimmed.substring(1);
+  if (trimmed.startsWith('instagram.com/')) return `https://${trimmed}`;
+  return `https://instagram.com/${trimmed}`;
+};
+
+const getLinkedinDirectUrl = (url?: string | null): string => {
+  if (!url) return '#';
+  let trimmed = url.trim();
+  if (!trimmed) return '#';
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  if (trimmed.startsWith('linkedin.com/')) return `https://${trimmed}`;
+  if (trimmed.startsWith('in/')) return `https://linkedin.com/${trimmed}`;
+  return `https://linkedin.com/in/${trimmed}`;
+};
+
+const getFacebookDirectUrl = (url?: string | null): string => {
+  if (!url) return '#';
+  let trimmed = url.trim();
+  if (!trimmed) return '#';
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  if (trimmed.startsWith('facebook.com/')) return `https://${trimmed}`;
+  return `https://facebook.com/${trimmed}`;
+};
+
+const getYoutubeDirectUrl = (url?: string | null): string => {
+  if (!url) return '#';
+  let trimmed = url.trim();
+  if (!trimmed) return '#';
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  if (trimmed.startsWith('youtube.com/') || trimmed.startsWith('youtu.be/')) return `https://${trimmed}`;
+  if (trimmed.startsWith('@')) return `https://youtube.com/${trimmed}`;
+  return `https://youtube.com/@${trimmed}`;
+};
 
 interface DigitalCardPublicProps {
   slug: string;
@@ -37,6 +124,7 @@ export const DigitalCardPublic: React.FC<DigitalCardPublicProps> = ({ slug }) =>
   const [card, setCard] = useState<DigitalCard | null>(null);
   const [status, setStatus] = useState<'loading' | 'ativo' | 'pausado' | 'error'>('loading');
   const [aiAgentModalOpen, setAiAgentModalOpen] = useState(false);
+  const [pixModalOpen, setPixModalOpen] = useState(false);
 
   // Formulário de primeiro contato
   const [inquiryName, setInquiryName] = useState('');
@@ -105,36 +193,131 @@ export const DigitalCardPublic: React.FC<DigitalCardPublicProps> = ({ slug }) =>
 
   const loadCard = async (recordEvent = false) => {
     try {
-      // Sempre busca direto da rede com parâmetro de controle e cabeçalhos no-cache
-      const res = await fetch(`/api/cards/slug/${encodeURIComponent(slug)}?_t=${Date.now()}`, {
-        cache: 'no-store',
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-        },
-      });
-      const json = await res.json();
+      // 1. Tenta carregar diretamente do banco Supabase (Suporte para Vercel e produção na nuvem)
+      try {
+        const client = await initSupabase();
+        if (client) {
+          const { data, error } = await client
+            .from('digital_cards')
+            .select('*')
+            .eq('slug', slug)
+            .maybeSingle();
 
-      if (json.status === 'ativo' && json.data) {
-        applyCardData(json.data, 'ativo');
+          if (!error && data) {
+            const cardData = mapDbToDigitalCard(data);
+            if (cardData.status === 'ativo') {
+              applyCardData(cardData, 'ativo');
 
-        if (recordEvent) {
-          const params = new URLSearchParams(window.location.search);
-          const isQr = params.get('src') === 'qr';
-          const eventKind = isQr ? 'qr_open' : 'card_open';
-
-          fetch(`/api/cards/${encodeURIComponent(slug)}/events`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ kind: eventKind }),
-          }).catch(() => {});
+              if (recordEvent && cardData.id) {
+                const params = new URLSearchParams(window.location.search);
+                const isQr = params.get('src') === 'qr';
+                const eventKind = isQr ? 'qr_open' : 'card_open';
+                try {
+                  void client.from('digital_card_events').insert([{
+                    card_id: cardData.id,
+                    kind: eventKind,
+                  }]);
+                } catch {}
+              }
+              return;
+            } else {
+              applyCardData(null, 'pausado');
+              return;
+            }
+          }
         }
-      } else {
-        applyCardData(null, 'pausado');
+      } catch (sbErr) {
+        console.warn('Busca no Supabase não obteve resultado, tentando canais alternativos:', sbErr);
       }
+
+      // 2. Tenta API backend Express (/api/cards/slug/:slug) se disponível
+      try {
+        const res = await fetch(`/api/cards/slug/${encodeURIComponent(slug)}?_t=${Date.now()}`, {
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+          },
+        });
+        if (res.ok) {
+          const contentType = res.headers.get('content-type') || '';
+          if (contentType.includes('application/json')) {
+            const json = await res.json();
+            if (json?.status === 'ativo' && json?.data) {
+              applyCardData(json.data, 'ativo');
+
+              if (recordEvent) {
+                const params = new URLSearchParams(window.location.search);
+                const isQr = params.get('src') === 'qr';
+                const eventKind = isQr ? 'qr_open' : 'card_open';
+
+                fetch(`/api/cards/${encodeURIComponent(slug)}/events`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ kind: eventKind }),
+                }).catch(() => {});
+              }
+              return;
+            } else if (json?.status === 'pausado') {
+              applyCardData(null, 'pausado');
+              return;
+            }
+          }
+        }
+      } catch (apiErr) {
+        // Silencioso em caso de erro na API Express
+      }
+
+      // 3. Fallback: Verifica sincronização recente no localStorage ('digital_card_synced')
+      try {
+        const syncedRaw = localStorage.getItem('digital_card_synced');
+        if (syncedRaw) {
+          const synced = JSON.parse(syncedRaw);
+          if (synced?.slug === slug && synced.card) {
+            if (synced.card.status === 'ativo') {
+              applyCardData(synced.card, 'ativo');
+              return;
+            } else {
+              applyCardData(null, 'pausado');
+              return;
+            }
+          }
+        }
+      } catch {}
+
+      // 4. Fallback: Verifica lista local no localStorage ('atomos_digital_cards')
+      try {
+        const localCardsRaw = localStorage.getItem('atomos_digital_cards');
+        if (localCardsRaw) {
+          const localCards = JSON.parse(localCardsRaw);
+          const foundLocal = localCards.find((c: any) => c.slug === slug);
+          if (foundLocal) {
+            if (foundLocal.status === 'ativo') {
+              applyCardData(foundLocal, 'ativo');
+              return;
+            } else {
+              applyCardData(null, 'pausado');
+              return;
+            }
+          }
+        }
+      } catch {}
+
+      // 5. Se já possuímos um cartão ativo em memória, não desative por falha temporária
+      setCard((prev) => {
+        if (!prev) {
+          applyCardData(null, 'pausado');
+        }
+        return prev;
+      });
     } catch (err) {
       console.error('Erro ao buscar cartão:', err);
-      setStatus('error');
+      setCard((prev) => {
+        if (!prev) {
+          setStatus('error');
+        }
+        return prev;
+      });
     }
   };
 
@@ -366,7 +549,9 @@ export const DigitalCardPublic: React.FC<DigitalCardPublicProps> = ({ slug }) =>
     (card.city && card.city.trim()) ||
     isConfiguredLink(card.googleMapsUrl)
   );
-  const hasContacts = hasWhatsapp || hasPhone || hasEmail || hasWebsite || hasLocation;
+  const hasGoogleReview = isConfiguredLink(card.googleReviewUrl);
+  const hasPix = Boolean(card.pixKey && card.pixKey.trim());
+  const hasContacts = hasWhatsapp || hasPhone || hasEmail || hasWebsite || hasLocation || hasGoogleReview || hasPix;
 
   // Redes Sociais
   const hasInstagram = isConfiguredLink(card.instagramUrl);
@@ -417,6 +602,30 @@ export const DigitalCardPublic: React.FC<DigitalCardPublicProps> = ({ slug }) =>
       case 'roboto': return '"Roboto", sans-serif';
       default: return 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
     }
+  };
+
+  // Registra clique externo anônimo para métricas sem interromper ou intermediar navegação
+  const handleOutboundClick = (destination: string) => {
+    if (!card) return;
+    try {
+      initSupabase().then((client) => {
+        if (client && card.id) {
+          void client.from('digital_card_events').insert([{
+            card_id: card.id,
+            kind: 'outbound_click',
+            destination,
+          }]);
+        }
+      }).catch(() => {});
+    } catch {}
+
+    try {
+      fetch(`/api/cards/${encodeURIComponent(card.slug)}/events`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: 'outbound_click', destination }),
+      }).catch(() => {});
+    } catch {}
   };
 
   return (
@@ -639,29 +848,33 @@ export const DigitalCardPublic: React.FC<DigitalCardPublicProps> = ({ slug }) =>
           const isNeuDark = card.appearanceTheme === 'neumorphism_dark';
           const neuStyles = getNeumorphicCardStyles(isNeuDark);
 
-          const itemBg = isNeu ? neuStyles.bg : undefined;
+          const itemBg = isNeu ? neuStyles.bg : (contentContrast.isDarkBg ? 'rgba(255, 255, 255, 0.08)' : '#F8FAFC');
           const itemShadow = isNeu ? neuStyles.raisedSubtle : undefined;
-          const itemBorder = isNeu ? neuStyles.border : undefined;
-          const itemTextColor = isNeu ? neuStyles.textColor : undefined;
+          const itemBorder = isNeu ? neuStyles.border : (contentContrast.isDarkBg ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid rgba(0, 0, 0, 0.05)');
+          const itemTextColor = isNeu ? neuStyles.textColor : (contentContrast.isDarkBg ? '#F8FAFC' : '#1E293B');
+          const itemSubtextColor = isNeu ? neuStyles.subtextColor : (contentContrast.isDarkBg ? '#94A3B8' : '#64748B');
 
           return (
             <div className="px-5 py-4 flex flex-col gap-2 border-t border-slate-100/50">
-              <h2 className="text-xs font-bold uppercase tracking-wider mb-1 px-1" style={{ color: card.supportTextColor || '#94a3b8' }}>
+              <h2 className="text-xs font-bold uppercase tracking-wider mb-1 px-1" style={{ color: card.supportTextColor || (contentContrast.isDarkBg ? '#94A3B8' : '#64748B') }}>
                 Canais de Comunicação
               </h2>
 
               {hasWhatsapp && (
                 <a
-                  href={`/cartao/${card.slug}/ir/whatsapp`}
-                  className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-all text-slate-800"
+                  href={getWhatsAppDirectUrl(card.whatsappPhone)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => handleOutboundClick('whatsapp')}
+                  className="flex items-center gap-3 p-3 rounded-xl hover:opacity-90 transition-all"
                   style={{ backgroundColor: itemBg, boxShadow: itemShadow, border: itemBorder, color: itemTextColor }}
                 >
                   <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
                     <MessageCircle size={18} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-[11px] text-slate-400 font-medium">WhatsApp Profissional</div>
-                    <div className="text-[13px] font-semibold truncate">
+                    <div className="text-[11px] font-medium" style={{ color: itemSubtextColor }}>WhatsApp Profissional</div>
+                    <div className="text-[13px] font-semibold truncate" style={{ color: itemTextColor }}>
                       {card.whatsappPhone}
                     </div>
                   </div>
@@ -671,15 +884,16 @@ export const DigitalCardPublic: React.FC<DigitalCardPublicProps> = ({ slug }) =>
               {hasPhone && (
                 <a
                   href={`tel:${card.phone!.replace(/\s+/g, '')}`}
-                  className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-all text-slate-800"
+                  onClick={() => handleOutboundClick('phone')}
+                  className="flex items-center gap-3 p-3 rounded-xl hover:opacity-90 transition-all"
                   style={{ backgroundColor: itemBg, boxShadow: itemShadow, border: itemBorder, color: itemTextColor }}
                 >
                   <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
                     <Phone size={18} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-[11px] text-slate-400 font-medium">Telefone</div>
-                    <div className="text-[13px] font-semibold truncate">
+                    <div className="text-[11px] font-medium" style={{ color: itemSubtextColor }}>Telefone</div>
+                    <div className="text-[13px] font-semibold truncate" style={{ color: itemTextColor }}>
                       {card.phone}
                     </div>
                   </div>
@@ -689,15 +903,16 @@ export const DigitalCardPublic: React.FC<DigitalCardPublicProps> = ({ slug }) =>
               {hasEmail && (
                 <a
                   href={`mailto:${card.email}`}
-                  className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-all text-slate-800"
+                  onClick={() => handleOutboundClick('email')}
+                  className="flex items-center gap-3 p-3 rounded-xl hover:opacity-90 transition-all"
                   style={{ backgroundColor: itemBg, boxShadow: itemShadow, border: itemBorder, color: itemTextColor }}
                 >
                   <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
                     <Mail size={18} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-[11px] text-slate-400 font-medium">E-mail</div>
-                    <div className="text-[13px] font-semibold truncate">
+                    <div className="text-[11px] font-medium" style={{ color: itemSubtextColor }}>E-mail</div>
+                    <div className="text-[13px] font-semibold truncate" style={{ color: itemTextColor }}>
                       {card.email}
                     </div>
                   </div>
@@ -706,40 +921,139 @@ export const DigitalCardPublic: React.FC<DigitalCardPublicProps> = ({ slug }) =>
 
               {hasWebsite && (
                 <a
-                  href={`/cartao/${card.slug}/ir/website`}
-                  className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-all text-slate-800"
+                  href={getExternalDirectUrl(card.websiteUrl)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => handleOutboundClick('website')}
+                  className="flex items-center gap-3 p-3 rounded-xl hover:opacity-90 transition-all"
                   style={{ backgroundColor: itemBg, boxShadow: itemShadow, border: itemBorder, color: itemTextColor }}
                 >
                   <div className="w-8 h-8 rounded-lg bg-sky-100 text-sky-700 flex items-center justify-center shrink-0">
                     <Globe size={18} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-[11px] text-slate-400 font-medium">Website Oficial</div>
-                    <div className="text-[13px] font-semibold truncate">
+                    <div className="text-[11px] font-medium" style={{ color: itemSubtextColor }}>Website Oficial</div>
+                    <div className="text-[13px] font-semibold truncate" style={{ color: itemTextColor }}>
                       {card.websiteUrl!.replace(/^https?:\/\//, '')}
                     </div>
                   </div>
-                  <ExternalLink size={14} className="text-slate-400" />
+                  <ExternalLink size={14} style={{ color: itemSubtextColor }} />
                 </a>
               )}
 
               {hasLocation && (
                 <a
-                  href={`/cartao/${card.slug}/ir/maps`}
-                  className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-all text-slate-800"
+                  href={getMapsDirectUrl(card)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => handleOutboundClick('maps')}
+                  className="flex items-center gap-3 p-3 rounded-xl hover:opacity-90 transition-all"
                   style={{ backgroundColor: itemBg, boxShadow: itemShadow, border: itemBorder, color: itemTextColor }}
                 >
                   <div className="w-8 h-8 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center shrink-0">
                     <MapPin size={18} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-[11px] text-slate-400 font-medium">Localização</div>
-                    <div className="text-[13px] font-semibold truncate">
+                    <div className="text-[11px] font-medium" style={{ color: itemSubtextColor }}>Localização</div>
+                    <div className="text-[13px] font-semibold truncate" style={{ color: itemTextColor }}>
                       {[card.address, card.addressNumber, card.city, card.state].filter(Boolean).join(', ')}
                     </div>
                   </div>
-                  <ExternalLink size={14} className="text-slate-400" />
+                  <ExternalLink size={14} style={{ color: itemSubtextColor }} />
                 </a>
+              )}
+
+              {hasGoogleReview && (
+                <a
+                  href={getGoogleReviewDirectUrl(card)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => handleOutboundClick('google_review')}
+                  className="flex items-center gap-3 p-3 rounded-xl transition-all shadow-xs group"
+                  style={{
+                    backgroundColor: isNeu ? itemBg : (contentContrast.isDarkBg ? 'rgba(245, 158, 11, 0.12)' : '#FEF3C7'),
+                    boxShadow: itemShadow,
+                    border: isNeu ? itemBorder : (contentContrast.isDarkBg ? '1px solid rgba(245, 158, 11, 0.3)' : '1px solid #FCD34D'),
+                    color: itemTextColor,
+                  }}
+                >
+                  <div className="w-9 h-9 rounded-lg bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+                    <Star size={18} className="fill-white text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className="text-[11px] font-bold"
+                        style={{ color: contentContrast.isDarkBg ? '#FDE68A' : '#78350F' }}
+                      >
+                        Avaliação no Google
+                      </span>
+                      <span
+                        className="text-[11px] font-extrabold tracking-tighter"
+                        style={{ color: contentContrast.isDarkBg ? '#F59E0B' : '#B45309' }}
+                      >
+                        ★★★★★
+                      </span>
+                    </div>
+                    <div
+                      className="text-[13px] font-bold truncate"
+                      style={{ color: isNeu ? itemTextColor : (contentContrast.isDarkBg ? '#F8FAFC' : '#1E293B') }}
+                    >
+                      Avaliar no Google Maps
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shrink-0 shadow-xs transition-colors group-hover:bg-amber-600">
+                    <span className="tracking-wide">Avaliar</span>
+                    <ExternalLink size={13} className="text-white" />
+                  </div>
+                </a>
+              )}
+
+              {/* Canal de Pagamento Rápido PIX */}
+              {hasPix && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPixModalOpen(true);
+                    handleOutboundClick('pix');
+                  }}
+                  className="w-full flex items-center gap-3 p-3 rounded-xl transition-all shadow-xs group text-left cursor-pointer"
+                  style={{
+                    backgroundColor: isNeu ? itemBg : (contentContrast.isDarkBg ? 'rgba(13, 148, 136, 0.15)' : '#F0FDFA'),
+                    boxShadow: itemShadow,
+                    border: isNeu ? itemBorder : (contentContrast.isDarkBg ? '1px solid rgba(13, 148, 136, 0.35)' : '1px solid #99F6E4'),
+                    color: itemTextColor,
+                  }}
+                >
+                  <div className="w-9 h-9 rounded-lg bg-teal-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                    <PixIcon size={20} color="#FFFFFF" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className="text-[11px] font-bold"
+                        style={{ color: contentContrast.isDarkBg ? '#5EEAD4' : '#115E59' }}
+                      >
+                        Pagar via PIX
+                      </span>
+                      <span
+                        className="text-[10px] font-semibold"
+                        style={{ color: contentContrast.isDarkBg ? '#99F6E4' : '#0F766E' }}
+                      >
+                        (Instantâneo)
+                      </span>
+                    </div>
+                    <div
+                      className="text-[13px] font-bold font-mono truncate"
+                      style={{ color: isNeu ? itemTextColor : (contentContrast.isDarkBg ? '#F0FDFA' : '#0F172A') }}
+                    >
+                      {formatPixKeyForDisplay(card.pixKey || '', card.pixType) || card.pixKey}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold shrink-0 shadow-xs transition-colors group-hover:bg-teal-700">
+                    <span className="tracking-wide">Ver QR Code</span>
+                  </div>
+                </button>
               )}
             </div>
           );
@@ -759,7 +1073,10 @@ export const DigitalCardPublic: React.FC<DigitalCardPublicProps> = ({ slug }) =>
               <div className="flex items-center justify-center gap-3 flex-wrap">
                 {hasInstagram && (
                   <a
-                    href={`/cartao/${card.slug}/ir/instagram`}
+                    href={getInstagramDirectUrl(card.instagramUrl)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => handleOutboundClick('instagram')}
                     className="w-10 h-10 rounded-full bg-slate-100 hover:bg-pink-100 hover:text-pink-600 text-slate-700 flex items-center justify-center transition-all"
                     style={{
                       backgroundColor: isNeu ? neuStyles.bg : undefined,
@@ -774,7 +1091,10 @@ export const DigitalCardPublic: React.FC<DigitalCardPublicProps> = ({ slug }) =>
                 )}
                 {hasLinkedin && (
                   <a
-                    href={`/cartao/${card.slug}/ir/linkedin`}
+                    href={getLinkedinDirectUrl(card.linkedinUrl)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => handleOutboundClick('linkedin')}
                     className="w-10 h-10 rounded-full bg-slate-100 hover:bg-blue-100 hover:text-blue-700 text-slate-700 flex items-center justify-center transition-all"
                     style={{
                       backgroundColor: isNeu ? neuStyles.bg : undefined,
@@ -789,7 +1109,10 @@ export const DigitalCardPublic: React.FC<DigitalCardPublicProps> = ({ slug }) =>
                 )}
                 {hasFacebook && (
                   <a
-                    href={`/cartao/${card.slug}/ir/facebook`}
+                    href={getFacebookDirectUrl(card.facebookUrl)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => handleOutboundClick('facebook')}
                     className="w-10 h-10 rounded-full bg-slate-100 hover:bg-indigo-100 hover:text-indigo-700 text-slate-700 flex items-center justify-center transition-all"
                     style={{
                       backgroundColor: isNeu ? neuStyles.bg : undefined,
@@ -804,7 +1127,10 @@ export const DigitalCardPublic: React.FC<DigitalCardPublicProps> = ({ slug }) =>
                 )}
                 {hasYoutube && (
                   <a
-                    href={`/cartao/${card.slug}/ir/youtube`}
+                    href={getYoutubeDirectUrl(card.youtubeUrl)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => handleOutboundClick('youtube')}
                     className="w-10 h-10 rounded-full bg-slate-100 hover:bg-red-100 hover:text-red-600 text-slate-700 flex items-center justify-center transition-all"
                     style={{
                       backgroundColor: isNeu ? neuStyles.bg : undefined,
@@ -1082,7 +1408,10 @@ export const DigitalCardPublic: React.FC<DigitalCardPublicProps> = ({ slug }) =>
         {hasCta && (
           <div className="px-6 py-4 border-t border-slate-100 text-center">
             <a
-              href={`/cartao/${card.slug}/ir/institutional`}
+              href={getExternalDirectUrl(card.ctaUrl)}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => handleOutboundClick('institutional')}
               className="inline-flex items-center justify-center gap-2 w-full py-2.5 px-4 text-xs font-bold rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-800 transition-colors shadow-xs"
             >
               <span>{card.ctaLabel}</span>
@@ -1106,6 +1435,18 @@ export const DigitalCardPublic: React.FC<DigitalCardPublicProps> = ({ slug }) =>
         onClose={() => setAiAgentModalOpen(false)}
         aiAgentInfo={aiAgentInfo}
         buttonText={card.aiAgentButtonText}
+        headerColor={card.backgroundColor}
+      />
+
+      {/* Modal de Pagamento Rápido via PIX com QR Code */}
+      <PixPaymentModal
+        isOpen={pixModalOpen}
+        onClose={() => setPixModalOpen(false)}
+        pixKey={card.pixKey || ''}
+        pixType={card.pixType}
+        pixBeneficiary={card.pixBeneficiary || card.name}
+        pixCity={card.pixCity || card.city || 'Brasil'}
+        cardName={card.name}
         headerColor={card.backgroundColor}
       />
     </main>

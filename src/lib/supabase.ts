@@ -419,7 +419,65 @@ export function mapDbToDigitalCard(row: any): DigitalCard {
     city: row.city || '',
     state: row.state || '',
     country: row.country || 'Brasil',
-    googleMapsUrl: row.google_maps_url || '',
+    googleMapsUrl: (() => {
+      const raw = row.google_maps_url || '';
+      let clean = raw;
+      if (clean.includes('###review=')) clean = clean.split('###review=')[0];
+      if (clean.includes('###pix=')) clean = clean.split('###pix=')[0];
+      return clean.trim();
+    })(),
+    googleReviewUrl: (() => {
+      const raw = row.google_maps_url || '';
+      if (raw.includes('###review=')) {
+        const afterReview = raw.split('###review=')[1] || '';
+        return (afterReview.includes('###pix=') ? afterReview.split('###pix=')[0] : afterReview).trim();
+      }
+      return (row as any).google_review_url || '';
+    })(),
+    pixKey: (() => {
+      const raw = row.google_maps_url || '';
+      if (raw.includes('###pix=')) {
+        try {
+          const encoded = raw.split('###pix=')[1] || '';
+          const parsed = JSON.parse(decodeURIComponent(encoded));
+          if (parsed && parsed.key) return parsed.key;
+        } catch (_) {}
+      }
+      return row.pix_key || row.billing_pix_key || '';
+    })(),
+    pixType: (() => {
+      const raw = row.google_maps_url || '';
+      if (raw.includes('###pix=')) {
+        try {
+          const encoded = raw.split('###pix=')[1] || '';
+          const parsed = JSON.parse(decodeURIComponent(encoded));
+          if (parsed && parsed.type) return parsed.type;
+        } catch (_) {}
+      }
+      return row.pix_type || 'telefone';
+    })(),
+    pixBeneficiary: (() => {
+      const raw = row.google_maps_url || '';
+      if (raw.includes('###pix=')) {
+        try {
+          const encoded = raw.split('###pix=')[1] || '';
+          const parsed = JSON.parse(decodeURIComponent(encoded));
+          if (parsed && parsed.beneficiary) return parsed.beneficiary;
+        } catch (_) {}
+      }
+      return row.pix_beneficiary || row.billing_customer_name || '';
+    })(),
+    pixCity: (() => {
+      const raw = row.google_maps_url || '';
+      if (raw.includes('###pix=')) {
+        try {
+          const encoded = raw.split('###pix=')[1] || '';
+          const parsed = JSON.parse(decodeURIComponent(encoded));
+          if (parsed && parsed.city) return parsed.city;
+        } catch (_) {}
+      }
+      return row.pix_city || row.city || 'Brasil';
+    })(),
     summary: row.summary || '',
     instagramUrl: row.instagram_url || '',
     linkedinUrl: row.linkedin_url || '',
@@ -467,7 +525,7 @@ export function mapDbToDigitalCard(row: any): DigitalCard {
     qrCodeForegroundColor: row.qr_code_foreground_color || '#12375B',
     qrCodeBackgroundColor: row.qr_code_background_color || '#FFFFFF',
     qrCodeLogoUrl: row.qr_code_logo_url || '',
-    qrCodeIncludeLogo: Boolean(row.qr_code_include_logo),
+    qrCodeIncludeLogo: row.qr_code_include_logo !== false,
     qrCodeLogoSize: Number(row.qr_code_logo_size || 0.22),
     qrCodeFrameStyle: row.qr_code_frame_style || 'none',
     qrCodeFrameText: row.qr_code_frame_text || 'SCAN ME',
@@ -539,22 +597,114 @@ export function mapDigitalCardToDb(card: Partial<DigitalCard>, userId: string): 
     whatsapp_phone: card.whatsappPhone || '',
     website_url: card.websiteUrl || '',
     address: card.address || '',
+    address_number: card.addressNumber || '',
+    postal_code: card.postalCode || '',
     city: card.city || '',
     state: card.state || '',
     country: card.country || 'Brasil',
+    google_maps_url: (() => {
+      const mapsBase = card.googleMapsUrl?.trim() || '';
+      const reviewPart = card.googleReviewUrl?.trim() ? `###review=${card.googleReviewUrl.trim()}` : '';
+      const pixPart = (card.pixKey?.trim() || card.pixBeneficiary?.trim())
+        ? `###pix=${encodeURIComponent(JSON.stringify({
+            key: card.pixKey?.trim() || '',
+            type: card.pixType || 'telefone',
+            beneficiary: card.pixBeneficiary?.trim() || '',
+            city: card.pixCity?.trim() || '',
+          }))}`
+        : '';
+      return `${mapsBase}${reviewPart}${pixPart}`;
+    })(),
     summary: card.summary || '',
     instagram_url: card.instagramUrl || '',
     linkedin_url: card.linkedinUrl || '',
     facebook_url: card.facebookUrl || '',
     youtube_url: card.youtubeUrl || '',
-    image_url: card.imageUrl || '',
-    company_logo_url: card.companyLogoUrl || '',
+    ai_agent_url: card.aiAgentUrl || '',
+    site_ai_agent_enabled: Boolean(card.siteAiAgentEnabled),
+    ai_agent_button_text: card.aiAgentButtonText || 'Atendente Virtual',
+    ai_agent_button_color: card.aiAgentButtonColor || '#7C3AED',
+    ai_agent_button_text_color: card.aiAgentButtonTextColor || '#FFFFFF',
+    ai_agent_glow_enabled: card.aiAgentGlowEnabled !== false,
+    ai_agent_glow_intensity: card.aiAgentGlowIntensity || 'medio',
+    ai_agent_button_size: card.aiAgentButtonSize || 'padrao',
+    ai_agent_button_padding_y: card.aiAgentButtonPaddingY ?? 12,
+    ai_agent_button_border_width: card.aiAgentButtonBorderWidth ?? 0,
+    ai_agent_button_border_color: card.aiAgentButtonBorderColor || '#A855F7',
+    appearance_theme: card.appearanceTheme || 'padrao',
     background_color: card.backgroundColor || '#12375B',
+    header_opacity: card.headerOpacity ?? 100,
     button_color: card.buttonColor || '#1A7FBE',
     body_color: card.bodyColor || '#EAF1F7',
     content_color: card.contentColor || '#FFFFFF',
-    appearance_theme: card.appearanceTheme || 'padrao',
+    content_opacity: card.contentOpacity ?? 100,
+    font_family: card.fontFamily || 'sans',
+    support_text_color: card.supportTextColor || '#64748B',
+    summary_text_color: card.summaryTextColor || '',
+    qr_code_text_color: card.qrCodeTextColor || '#1E293B',
+    qr_code_section_bg_color: card.qrCodeSectionBgColor || '',
+    inquiry_text_color: card.inquiryTextColor || '',
+    divider_color: card.dividerColor || '#D7E0E7',
+    divider_width: card.dividerWidth ?? 1,
+    contact_icon_color: card.contactIconColor || '#1A507F',
+    contact_icon_size: card.contactIconSize ?? 18,
+    buttons_border_radius: card.buttonsBorderRadius ?? 16,
+    vcard_button_color: card.vcardButtonColor || '#1A7FBE',
+    vcard_button_text_color: card.vcardButtonTextColor || '#FFFFFF',
+    vcard_button_border_radius: card.vcardButtonBorderRadius,
+    whatsapp_button_color: card.whatsappButtonColor || '#059669',
+    whatsapp_button_text_color: card.whatsappButtonTextColor || '#FFFFFF',
+    whatsapp_button_border_radius: card.whatsappButtonBorderRadius,
+    pwa_button_color: card.pwaButtonColor || '#0F172A',
+    pwa_button_text_color: card.pwaButtonTextColor || '#FFFFFF',
+    pwa_button_border_radius: card.pwaButtonBorderRadius,
+    qr_code_style: card.qrCodeStyle || 'arredondado',
+    qr_code_foreground_color: card.qrCodeForegroundColor || '#12375B',
+    qr_code_background_color: card.qrCodeBackgroundColor || '#FFFFFF',
+    qr_code_logo_url: card.qrCodeLogoUrl || '',
+    qr_code_include_logo: card.qrCodeIncludeLogo !== false,
+    qr_code_logo_size: Number(card.qrCodeLogoSize || 0.22),
+    qr_code_frame_style: card.qrCodeFrameStyle || 'none',
+    qr_code_frame_text: card.qrCodeFrameText || 'SCAN ME',
+    qr_code_frame_color: card.qrCodeFrameColor || '',
+    qr_code_frame_text_color: card.qrCodeFrameTextColor || '#FFFFFF',
+    qr_code_dots_style: card.qrCodeDotsStyle || 'square',
+    qr_code_corners_square_style: card.qrCodeCornersSquareStyle || 'square',
+    qr_code_corners_square_color: card.qrCodeCornersSquareColor || '',
+    qr_code_corners_dot_style: card.qrCodeCornersDotStyle || 'square',
+    qr_code_corners_dot_color: card.qrCodeCornersDotColor || '',
+    qr_code_gradient_enabled: Boolean(card.qrCodeGradientEnabled),
+    qr_code_gradient_type: card.qrCodeGradientType || 'linear',
+    qr_code_gradient_start_color: card.qrCodeGradientStartColor || '#12375B',
+    qr_code_gradient_end_color: card.qrCodeGradientEndColor || '#1A7FBE',
+    qr_code_transparent_bg: Boolean(card.qrCodeTransparentBg),
+    image_url: card.imageUrl || '',
+    company_logo_url: card.companyLogoUrl || '',
+    frame_scale: card.frameScale ?? 97,
+    company_logo_focus_x: card.companyLogoFocusX ?? 56,
+    company_logo_focus_y: card.companyLogoFocusY ?? 67,
+    content_background_image_url: card.contentBackgroundImageUrl || '',
+    content_background_image_focus_x: card.contentBackgroundImageFocusX ?? 50,
+    content_background_image_focus_y: card.contentBackgroundImageFocusY ?? 50,
+    content_background_image_opacity: card.contentBackgroundImageOpacity ?? 100,
+    content_background_image_scale: card.contentBackgroundImageScale ?? 100,
+    mobile_app_name: card.mobileAppName || '',
+    mobile_icon_url: card.mobileIconUrl || '',
+    cta_label: card.ctaLabel || '',
+    cta_url: card.ctaUrl || '',
     footer_text: card.footerText || 'Cartão digital disponibilizado por Átomos Infinity',
+    tracking_enabled: Boolean(card.trackingEnabled),
+    activity_tracking_enabled: card.activityTrackingEnabled !== false,
+    ga_measurement_id: card.gaMeasurementId || '',
+    meta_pixel_id: card.metaPixelId || '',
+    gtm_container_id: card.gtmContainerId || '',
+    inquiry_enabled: card.inquiryEnabled !== false,
+    hide_inquiry_form: Boolean(card.hideInquiryForm),
+    inquiry_show_name: card.inquiryShowName !== false,
+    inquiry_show_email: card.inquiryShowEmail !== false,
+    inquiry_show_phone: card.inquiryShowPhone !== false,
+    inquiry_show_message: card.inquiryShowMessage !== false,
+    inquiry_show_consent: card.inquiryShowConsent !== false,
     updated_at: new Date().toISOString(),
   };
 }

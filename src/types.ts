@@ -69,6 +69,7 @@ export interface DigitalCard {
   state?: string;
   country?: string;
   googleMapsUrl?: string;
+  googleReviewUrl?: string;
 
   // Conteúdo
   summary?: string;
@@ -223,6 +224,12 @@ export interface DigitalCard {
   billingCustomerPhone?: string;
   billingNotes?: string;
   billingLastRenewedAt?: string;
+
+  // Pagamento Rápido via PIX (Exibição no Cartão Digital)
+  pixKey?: string;
+  pixType?: 'telefone' | 'email' | 'cpf' | 'cnpj' | 'aleatoria';
+  pixBeneficiary?: string;
+  pixCity?: string;
 }
 
 export type CardBillingCycle = 'mensal' | 'trimestral' | 'semestral' | 'anual' | 'degustacao' | 'vitalicio';

@@ -241,6 +241,11 @@ const DEFAULT_LANDING_TEMPLATE = {
   state: '',
   country: 'Brasil',
   googleMapsUrl: '',
+  googleReviewUrl: '',
+  pixKey: '',
+  pixType: 'telefone',
+  pixBeneficiary: '',
+  pixCity: 'Brasil',
   summary: 'Consultoria e inteligência estratégica empresarial pela Átomos Infinity.',
   instagramUrl: '',
   linkedinUrl: '',
@@ -433,7 +438,7 @@ seedInitialData();
 // ----------------------------------------------------
 // 1. ROTA DE REDIRECIONAMENTO RASTREADO: /cartao/:slug/ir/:dest
 // ----------------------------------------------------
-app.get('/cartao/:slug/ir/:dest', (req, res) => {
+app.get('/cartao/:slug/ir/:dest', async (req, res) => {
   const ALLOWED = [
     'website',
     'institutional',
@@ -452,7 +457,99 @@ app.get('/cartao/:slug/ir/:dest', (req, res) => {
   }
 
   const cards = readJson<any[]>(CARDS_FILE, []);
-  const card = cards.find((c) => c.slug === req.params.slug && c.status === 'ativo');
+  let card = cards.find((c) => c.slug === req.params.slug && c.status === 'ativo');
+
+  // Se não encontrar no arquivo JSON local, busca diretamente no Supabase
+  if (!card && supabaseAdmin) {
+    try {
+      const { data, error } = await supabaseAdmin
+        .from('digital_cards')
+        .select('*')
+        .eq('slug', req.params.slug)
+        .maybeSingle();
+
+      if (!error && data && data.status === 'ativo') {
+        card = {
+          ...data,
+          websiteUrl: data.website_url,
+          ctaUrl: data.cta_url,
+          instagramUrl: data.instagram_url,
+          linkedinUrl: data.linkedin_url,
+          facebookUrl: data.facebook_url,
+          youtubeUrl: data.youtube_url,
+          whatsappPhone: data.whatsapp_phone,
+          googleMapsUrl: (() => {
+            const raw = data.google_maps_url || '';
+            let clean = raw;
+            if (clean.includes('###review=')) clean = clean.split('###review=')[0];
+            if (clean.includes('###pix=')) clean = clean.split('###pix=')[0];
+            return clean.trim();
+          })(),
+          googleReviewUrl: (() => {
+            const raw = data.google_maps_url || '';
+            if (raw.includes('###review=')) {
+              const afterReview = raw.split('###review=')[1] || '';
+              return (afterReview.includes('###pix=') ? afterReview.split('###pix=')[0] : afterReview).trim();
+            }
+            return (data.google_review_url || '');
+          })(),
+          pixKey: (() => {
+            const raw = data.google_maps_url || '';
+            if (raw.includes('###pix=')) {
+              try {
+                const encoded = raw.split('###pix=')[1] || '';
+                const parsed = JSON.parse(decodeURIComponent(encoded));
+                if (parsed && parsed.key) return parsed.key;
+              } catch (_) {}
+            }
+            return data.pix_key || data.billing_pix_key || '';
+          })(),
+          pixType: (() => {
+            const raw = data.google_maps_url || '';
+            if (raw.includes('###pix=')) {
+              try {
+                const encoded = raw.split('###pix=')[1] || '';
+                const parsed = JSON.parse(decodeURIComponent(encoded));
+                if (parsed && parsed.type) return parsed.type;
+              } catch (_) {}
+            }
+            return data.pix_type || 'telefone';
+          })(),
+          pixBeneficiary: (() => {
+            const raw = data.google_maps_url || '';
+            if (raw.includes('###pix=')) {
+              try {
+                const encoded = raw.split('###pix=')[1] || '';
+                const parsed = JSON.parse(decodeURIComponent(encoded));
+                if (parsed && parsed.beneficiary) return parsed.beneficiary;
+              } catch (_) {}
+            }
+            return data.pix_beneficiary || data.billing_customer_name || '';
+          })(),
+          pixCity: (() => {
+            const raw = data.google_maps_url || '';
+            if (raw.includes('###pix=')) {
+              try {
+                const encoded = raw.split('###pix=')[1] || '';
+                const parsed = JSON.parse(decodeURIComponent(encoded));
+                if (parsed && parsed.city) return parsed.city;
+              } catch (_) {}
+            }
+            return data.pix_city || data.city || 'Brasil';
+          })(),
+          address: data.address,
+          addressNumber: data.address_number,
+          city: data.city,
+          state: data.state,
+          country: data.country,
+          aiAgentUrl: data.ai_agent_url,
+          activityTrackingEnabled: data.activity_tracking_enabled,
+        };
+      }
+    } catch (e) {
+      console.warn('Erro ao consultar Supabase na rota /ir/:', e);
+    }
+  }
 
   if (!card) {
     return res.status(404).send('Cartão não encontrado ou indisponível.');
@@ -466,26 +563,80 @@ app.get('/cartao/:slug/ir/:dest', (req, res) => {
     case 'institutional':
       targetUrl = card.ctaUrl;
       break;
-    case 'instagram':
-      targetUrl = card.instagramUrl;
+    case 'instagram': {
+      let raw = card.instagramUrl ? card.instagramUrl.trim() : null;
+      if (raw) {
+        if (raw.startsWith('http://') || raw.startsWith('https://')) {
+          targetUrl = raw;
+        } else {
+          let clean = raw.replace(/^@/, '');
+          targetUrl = clean.startsWith('instagram.com/') ? `https://${clean}` : `https://instagram.com/${clean}`;
+        }
+      }
       break;
-    case 'linkedin':
-      targetUrl = card.linkedinUrl;
+    }
+    case 'linkedin': {
+      let raw = card.linkedinUrl ? card.linkedinUrl.trim() : null;
+      if (raw) {
+        if (raw.startsWith('http://') || raw.startsWith('https://')) {
+          targetUrl = raw;
+        } else {
+          let clean = raw.replace(/^@/, '');
+          targetUrl = (clean.startsWith('linkedin.com/') || clean.startsWith('in/')) ? `https://${clean.replace(/^in\//, 'linkedin.com/in/')}` : `https://linkedin.com/in/${clean}`;
+        }
+      }
       break;
-    case 'facebook':
-      targetUrl = card.facebookUrl;
+    }
+    case 'facebook': {
+      let raw = card.facebookUrl ? card.facebookUrl.trim() : null;
+      if (raw) {
+        if (raw.startsWith('http://') || raw.startsWith('https://')) {
+          targetUrl = raw;
+        } else {
+          let clean = raw.replace(/^@/, '');
+          targetUrl = clean.startsWith('facebook.com/') ? `https://${clean}` : `https://facebook.com/${clean}`;
+        }
+      }
       break;
-    case 'youtube':
-      targetUrl = card.youtubeUrl;
+    }
+    case 'youtube': {
+      let raw = card.youtubeUrl ? card.youtubeUrl.trim() : null;
+      if (raw) {
+        if (raw.startsWith('http://') || raw.startsWith('https://')) {
+          targetUrl = raw;
+        } else {
+          let clean = raw.replace(/^@/, '');
+          targetUrl = (clean.startsWith('youtube.com/') || clean.startsWith('youtu.be/')) ? `https://${clean}` : `https://youtube.com/@${clean}`;
+        }
+      }
       break;
+    }
     case 'whatsapp':
       if (card.whatsappPhone) {
-        const clean = card.whatsappPhone.replace(/\D/g, '');
+        let clean = card.whatsappPhone.replace(/\D/g, '');
+        if (clean && !clean.startsWith('55') && (clean.length === 10 || clean.length === 11)) {
+          clean = `55${clean}`;
+        }
         targetUrl = `https://wa.me/${clean}`;
       }
       break;
     case 'maps':
-      targetUrl = card.googleMapsUrl || (card.address ? `https://maps.google.com/?q=${encodeURIComponent(card.address)}` : null);
+      if (card.googleMapsUrl && card.googleMapsUrl.trim()) {
+        const raw = card.googleMapsUrl.trim();
+        targetUrl = (raw.startsWith('http://') || raw.startsWith('https://')) ? raw : `https://${raw}`;
+      } else {
+        const parts = [card.address, card.addressNumber, card.city, card.state, card.country].filter(Boolean);
+        if (parts.length > 0) {
+          targetUrl = `https://maps.google.com/?q=${encodeURIComponent(parts.join(', '))}`;
+        }
+      }
+      break;
+    case 'google_review':
+    case 'review':
+      if (card.googleReviewUrl && card.googleReviewUrl.trim()) {
+        const raw = card.googleReviewUrl.trim();
+        targetUrl = (raw.startsWith('http://') || raw.startsWith('https://')) ? raw : `https://${raw}`;
+      }
       break;
     case 'ai_agent':
       if (card.aiAgentUrl) {
@@ -495,21 +646,35 @@ app.get('/cartao/:slug/ir/:dest', (req, res) => {
       break;
   }
 
-  if (!targetUrl || !targetUrl.startsWith('http')) {
+  if (targetUrl && !targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+    targetUrl = `https://${targetUrl}`;
+  }
+
+  if (!targetUrl) {
     return res.status(404).send('Destino não configurado neste cartão.');
   }
 
   // Grava métrica 100% anônima: SEM IP, SEM USER-AGENT, SEM SESSÃO
   if (card.activityTrackingEnabled !== false) {
-    const events = readJson<any[]>(EVENTS_FILE, []);
-    events.push({
-      id: Date.now(),
-      cardId: card.id,
-      kind: 'outbound_click',
-      destination,
-      createdAt: new Date().toISOString(),
-    });
-    writeJson(EVENTS_FILE, events);
+    try {
+      const events = readJson<any[]>(EVENTS_FILE, []);
+      events.push({
+        id: Date.now(),
+        cardId: card.id,
+        kind: 'outbound_click',
+        destination,
+        createdAt: new Date().toISOString(),
+      });
+      writeJson(EVENTS_FILE, events);
+    } catch {}
+
+    if (supabaseAdmin && card.id) {
+      void supabaseAdmin.from('digital_card_events').insert([{
+        card_id: card.id,
+        kind: 'outbound_click',
+        destination,
+      }]);
+    }
   }
 
   return res.redirect(302, targetUrl);
@@ -688,11 +853,86 @@ app.get('/api/cards/:id(\\d+)', (req, res) => {
 });
 
 // Obter dados públicos por slug (sempre sem cache)
-app.get('/api/cards/slug/:slug', (req, res) => {
+app.get('/api/cards/slug/:slug', async (req, res) => {
   setNoCacheHeaders(res);
   const slug = req.params.slug;
   const cards = readJson<any[]>(CARDS_FILE, []);
-  const card = cards.find((c) => c.slug === slug);
+  let card = cards.find((c) => c.slug === slug);
+
+  // Se não encontrar no arquivo JSON local, busca diretamente no Supabase
+  if (!card && supabaseAdmin) {
+    try {
+      const { data, error } = await supabaseAdmin
+        .from('digital_cards')
+        .select('*')
+        .eq('slug', slug)
+        .maybeSingle();
+
+      if (!error && data) {
+        card = {
+          id: data.id,
+          userId: data.user_id,
+          slug: data.slug,
+          name: data.name,
+          title: data.title,
+          brandName: data.brand_name,
+          bio: data.bio,
+          summary: data.summary,
+          phone: data.phone,
+          whatsappPhone: data.whatsapp_phone,
+          email: data.email,
+          websiteUrl: data.website_url,
+          address: data.address,
+          addressNumber: data.address_number,
+          city: data.city,
+          state: data.state,
+          country: data.country,
+          postalCode: data.postal_code,
+          googleMapsUrl: data.google_maps_url,
+          instagramUrl: data.instagram_url,
+          linkedinUrl: data.linkedin_url,
+          facebookUrl: data.facebook_url,
+          youtubeUrl: data.youtube_url,
+          avatarUrl: data.avatar_url,
+          bannerUrl: data.banner_url,
+          qrCodeColor: data.qr_code_color,
+          primaryColor: data.primary_color,
+          backgroundColor: data.background_color,
+          textColor: data.text_color,
+          supportTextColor: data.support_text_color,
+          activityTrackingEnabled: data.activity_tracking_enabled,
+          aiAgentUrl: data.ai_agent_url,
+          aiAgentButtonText: data.ai_agent_button_text,
+          aiAgentGlowEnabled: data.ai_agent_glow_enabled,
+          aiAgentGlowIntensity: data.ai_agent_glow_intensity,
+          aiAgentButtonSize: data.ai_agent_button_size,
+          aiAgentButtonPaddingY: data.ai_agent_button_padding_y,
+          aiAgentButtonBorderWidth: data.ai_agent_button_border_width,
+          aiAgentButtonBorderColor: data.ai_agent_button_border_color,
+          appearanceTheme: data.appearance_theme,
+          saveContactBgColor: data.save_contact_bg_color,
+          saveContactTextColor: data.save_contact_text_color,
+          saveContactBorderRadius: data.save_contact_border_radius,
+          mobileAppBgColor: data.mobile_app_bg_color,
+          mobileAppTextColor: data.mobile_app_text_color,
+          mobileAppBorderRadius: data.mobile_app_border_radius,
+          mobileAppName: data.mobile_app_name,
+          aiAgentBgColor: data.ai_agent_bg_color,
+          aiAgentTextColor: data.ai_agent_text_color,
+          aiAgentBorderRadius: data.ai_agent_border_radius,
+          customShareText: data.custom_share_text,
+          ctaLabel: data.cta_label,
+          ctaUrl: data.cta_url,
+          footerText: data.footer_text,
+          status: data.status || 'ativo',
+          createdAt: data.created_at,
+          updatedAt: data.updated_at,
+        };
+      }
+    } catch (e) {
+      console.warn('Erro ao consultar Supabase na rota /api/cards/slug/:', e);
+    }
+  }
 
   // Regra de ouro: se pausado ou não encontrado, retorna estado neutro sem vazar dados pessoais!
   if (!card || card.status === 'pausado') {

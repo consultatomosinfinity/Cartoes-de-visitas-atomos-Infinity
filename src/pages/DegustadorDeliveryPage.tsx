@@ -19,6 +19,7 @@ import {
   Lock,
 } from 'lucide-react';
 import { DigitalCard } from '../types.ts';
+import { initSupabase, mapDbToDigitalCard } from '../lib/supabase.ts';
 import { DigitalCardQrCode } from '../components/DigitalCardQrCode.tsx';
 import { DigitalCardLivePreview } from '../components/DigitalCardLivePreview.tsx';
 import { ThemeToggle } from '../components/ThemeToggle.tsx';
@@ -49,45 +50,94 @@ export const DegustadorDeliveryPage: React.FC<DegustadorDeliveryPageProps> = ({ 
     setLoading(true);
     setError(null);
 
-    // Busca dados do cartão público
-    fetch(`/api/cards/slug/${slug}`)
-      .then((res) => (res.ok ? res.json() : null))
-      .then((json) => {
-        if (json && json.status === 'pausado') {
-          setError('Este cartão digital encontra-se pausado no momento pelo Administrador Master.');
-          setCard(null);
-          return;
+    const loadDegustadorCard = async () => {
+      try {
+        // 1. Tenta carregar do Supabase
+        try {
+          const client = await initSupabase();
+          if (client) {
+            const { data, error: sbError } = await client
+              .from('digital_cards')
+              .select('*')
+              .eq('slug', slug)
+              .maybeSingle();
+
+            if (!sbError && data) {
+              const cardData = mapDbToDigitalCard(data);
+              if (cardData.status === 'pausado') {
+                setError('Este cartão digital encontra-se pausado no momento pelo Administrador Master.');
+                setCard(null);
+                return;
+              }
+              setCard(cardData);
+              return;
+            }
+          }
+        } catch (sbErr) {
+          console.warn('Erro ao buscar cartão no Supabase (degustador):', sbErr);
         }
 
-        if (json && json.data) {
-          setCard(json.data);
-        } else {
-          // Fallback para lista completa
-          fetch('/api/cards')
-            .then((r) => (r.ok ? r.json() : []))
-            .then((allCards: DigitalCard[]) => {
-              const found = allCards.find((c) => c.slug === slug);
-              if (found) {
-                if (found.status === 'pausado') {
-                  setError('Este cartão digital encontra-se pausado no momento pelo Administrador Master.');
-                } else {
-                  setCard(found);
-                }
-              } else {
-                setError('Cartão digital não encontrado.');
+        // 2. Tenta API Express (/api/cards/slug/:slug)
+        try {
+          const res = await fetch(`/api/cards/slug/${encodeURIComponent(slug)}`);
+          if (res.ok) {
+            const contentType = res.headers.get('content-type') || '';
+            if (contentType.includes('application/json')) {
+              const json = await res.json();
+              if (json?.status === 'pausado') {
+                setError('Este cartão digital encontra-se pausado no momento pelo Administrador Master.');
+                setCard(null);
+                return;
               }
-            })
-            .catch(() => {
-              setError('Erro ao carregar dados do cartão.');
-            });
-        }
-      })
-      .catch(() => {
-        setError('Erro na conexão com o servidor.');
-      })
-      .finally(() => {
+              if (json?.data) {
+                setCard(json.data);
+                return;
+              }
+            }
+          }
+        } catch {}
+
+        // 3. Fallback localStorage ('atomos_digital_cards' e 'digital_card_synced')
+        try {
+          const syncedRaw = localStorage.getItem('digital_card_synced');
+          if (syncedRaw) {
+            const synced = JSON.parse(syncedRaw);
+            if (synced?.slug === slug && synced.card) {
+              if (synced.card.status === 'pausado') {
+                setError('Este cartão digital encontra-se pausado no momento pelo Administrador Master.');
+                setCard(null);
+                return;
+              }
+              setCard(synced.card);
+              return;
+            }
+          }
+
+          const localCardsRaw = localStorage.getItem('atomos_digital_cards');
+          if (localCardsRaw) {
+            const localCards = JSON.parse(localCardsRaw);
+            const found = localCards.find((c: any) => c.slug === slug);
+            if (found) {
+              if (found.status === 'pausado') {
+                setError('Este cartão digital encontra-se pausado no momento pelo Administrador Master.');
+                setCard(null);
+                return;
+              }
+              setCard(found);
+              return;
+            }
+          }
+        } catch {}
+
+        setError('Cartão digital não encontrado.');
+      } catch {
+        setError('Erro ao carregar dados do cartão.');
+      } finally {
         setLoading(false);
-      });
+      }
+    };
+
+    loadDegustadorCard();
   }, [slug]);
 
   const cardUrl = typeof window !== 'undefined' ? `${window.location.origin}/cartao/${slug}` : `https://consultatomosinfinity.com.br/cartao/${slug}`;
