@@ -637,15 +637,6 @@ export function mapDigitalCardToDb(card: Partial<DigitalCard>, userId: string): 
     inquiry_show_phone: card.inquiryShowPhone !== false,
     inquiry_show_message: card.inquiryShowMessage !== false,
     inquiry_show_consent: card.inquiryShowConsent !== false,
-    billing_cycle: card.billingCycle || 'trimestral',
-    billing_amount: card.billingAmount,
-    billing_start_date: card.billingStartDate,
-    billing_due_date: card.billingDueDate,
-    billing_pix_key: card.billingPixKey,
-    billing_customer_name: card.billingCustomerName,
-    billing_customer_phone: card.billingCustomerPhone,
-    billing_notes: card.billingNotes,
-    billing_last_renewed_at: card.billingLastRenewedAt,
     updated_at: new Date().toISOString(),
   };
 
