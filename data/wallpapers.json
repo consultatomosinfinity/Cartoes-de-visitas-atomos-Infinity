@@ -30,9 +30,9 @@
     },
     {
       "id": "atomosinfinity",
-      "name": "Atomosinfinity",
-      "description": "Coleção do autor",
-      "icon": "Folder",
+      "name": "Átomos Infinity",
+      "description": "Logotipos, ícones e elementos oficiais da marca",
+      "icon": "Sparkles",
       "order": 5
     },
     {
@@ -51,6 +51,38 @@
     }
   ],
   "items": [
+    {
+      "id": "logo-oficial-atomos",
+      "title": "Logotipo Oficial Átomos Infinity",
+      "folderId": "atomosinfinity",
+      "url": "/logo-atomos.svg",
+      "thumbnailUrl": "/logo-atomos.svg",
+      "recommendedTheme": "personalizado"
+    },
+    {
+      "id": "favicon-atomos",
+      "title": "Favicon Átomos Infinity",
+      "folderId": "atomosinfinity",
+      "url": "/favicon-atomos.svg",
+      "thumbnailUrl": "/favicon-atomos.svg",
+      "recommendedTheme": "personalizado"
+    },
+    {
+      "id": "icon-192-atomos",
+      "title": "Ícone PWA 192x192 Átomos",
+      "folderId": "atomosinfinity",
+      "url": "/icon-192.png",
+      "thumbnailUrl": "/icon-192.png",
+      "recommendedTheme": "personalizado"
+    },
+    {
+      "id": "icon-512-atomos",
+      "title": "Ícone PWA 512x512 Átomos",
+      "folderId": "atomosinfinity",
+      "url": "/icon-512.png",
+      "thumbnailUrl": "/icon-512.png",
+      "recommendedTheme": "personalizado"
+    },
     {
       "id": "avatar-gato-gravata",
       "title": "Gato de Gravata Executivo",
@@ -93,7 +125,7 @@
     },
     {
       "id": "tech-neon-circuit",
-      "title": "Deep Indigo Waves",
+      title: "Deep Indigo Waves",
       "folderId": "tecnologia",
       "url": "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=1200&q=80",
       "thumbnailUrl": "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=300&q=70",
