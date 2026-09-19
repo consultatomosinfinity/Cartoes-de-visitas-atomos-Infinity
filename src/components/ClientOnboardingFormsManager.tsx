@@ -169,12 +169,25 @@ export function ClientOnboardingFormsManager({ onCardCreated, onOpenCard }: Clie
     try {
       setLoading(true);
       const res = await fetch('/api/onboarding-forms');
-      if (res.ok) {
+      const contentType = res.headers.get('content-type');
+      if (res.ok && contentType && contentType.includes('application/json')) {
         const data = await res.json();
         setForms(data);
+        return;
       }
+      throw new Error('API unavailable');
     } catch (err) {
-      console.error('Erro ao carregar formulários:', err);
+      // Fallback localStorage
+      try {
+        const localRaw = localStorage.getItem('atomos_onboarding_forms');
+        if (localRaw) {
+          setForms(JSON.parse(localRaw));
+        } else {
+          setForms([]);
+        }
+      } catch {
+        setForms([]);
+      }
     } finally {
       setLoading(false);
     }
@@ -192,22 +205,82 @@ export function ClientOnboardingFormsManager({ onCardCreated, onOpenCard }: Clie
       const res = await fetch(`/api/onboarding-forms/${form.id}/convert-to-card`, {
         method: 'POST',
       });
-      const data = await res.json();
+      const contentType = res.headers.get('content-type');
+      if (res.ok && contentType && contentType.includes('application/json')) {
+        const data = await res.json();
+        setActionSuccessMessage(`Cartão "${data.card.name}" gerado com sucesso! Redirecionando para edição...`);
+        fetchForms();
 
-      if (!res.ok) {
-        throw new Error(data.error || 'Erro ao converter formulário.');
+        if (onCardCreated && data.card) {
+          setTimeout(() => {
+            onCardCreated(data.card);
+          }, 1200);
+        }
+        return;
       }
+      throw new Error('API unavailable');
+    } catch (err: any) {
+      // Fallback conversão local
+      const newCard: any = {
+        id: `card-${Date.now()}`,
+        slug: form.fullName.toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 30) + '-' + Math.random().toString(36).substring(2, 6),
+        name: form.fullName,
+        jobTitle: form.jobTitle,
+        brandName: form.companyName || 'Átomos Infinity',
+        whatsappPhone: form.whatsappPhone,
+        email: form.email,
+        city: form.city,
+        state: form.state,
+        fullAddress: form.fullAddress,
+        summaryBio: form.summaryBio,
+        photoUrl: form.photoUrl,
+        logoUrl: form.logoUrl,
+        contentBackgroundUrl: form.contentBackgroundUrl,
+        instagramHandle: form.instagramHandle,
+        websiteUrl: form.websiteUrl,
+        linkedinUrl: form.linkedinUrl,
+        facebookUrl: form.facebookUrl,
+        youtubeUrl: form.youtubeUrl,
+        tiktokUrl: form.tiktokUrl,
+        customLinkName: form.customLinkName,
+        customLinkUrl: form.customLinkUrl,
+        pixKey: form.pixKey,
+        pixType: form.pixType,
+        pixBeneficiary: form.pixBeneficiary,
+        preferredTheme: form.preferredTheme || 'escuro',
+        status: 'ativo',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
 
-      setActionSuccessMessage(`Cartão "${data.card.name}" gerado com sucesso! Redirecionando para edição...`);
+      try {
+        const cardsRaw = localStorage.getItem('atomos_digital_cards');
+        const cardsList = cardsRaw ? JSON.parse(cardsRaw) : [];
+        cardsList.unshift(newCard);
+        localStorage.setItem('atomos_digital_cards', JSON.stringify(cardsList));
+
+        // Atualiza status do form para convertido no localStorage
+        const formsRaw = localStorage.getItem('atomos_onboarding_forms');
+        if (formsRaw) {
+          const fList = JSON.parse(formsRaw);
+          const idx = fList.findIndex((f: any) => f.id === form.id);
+          if (idx !== -1) {
+            fList[idx].status = 'convertido';
+            fList[idx].generatedCardId = newCard.id;
+            fList[idx].generatedCardSlug = newCard.slug;
+            localStorage.setItem('atomos_onboarding_forms', JSON.stringify(fList));
+          }
+        }
+      } catch {}
+
+      setActionSuccessMessage(`Cartão "${newCard.name}" gerado com sucesso! Redirecionando para edição...`);
       fetchForms();
 
-      if (onCardCreated && data.card) {
+      if (onCardCreated) {
         setTimeout(() => {
-          onCardCreated(data.card);
+          onCardCreated(newCard);
         }, 1200);
       }
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Erro ao gerar cartão.');
     } finally {
       setConvertingId(null);
     }

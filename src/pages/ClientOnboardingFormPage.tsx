@@ -268,20 +268,42 @@ export function ClientOnboardingFormPage() {
         notes: notes.trim(),
       };
 
-      const res = await fetch('/api/onboarding-forms', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+      try {
+        const res = await fetch('/api/onboarding-forms', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
 
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Erro ao enviar o formulário.');
+        const contentType = res.headers.get('content-type');
+        if (res.ok && contentType && contentType.includes('application/json')) {
+          const data = await res.json();
+          setSubmittedForm(data.form || payload);
+          setIsSuccess(true);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+          return;
+        }
+        throw new Error('API unavailable or returned non-json');
+      } catch {
+        // Fallback localStorage para Vercel / Static Hosting
+        const newFormRecord = {
+          id: `form-${Date.now()}`,
+          ...payload,
+          status: 'pendente',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        try {
+          const existingRaw = localStorage.getItem('atomos_onboarding_forms');
+          const existingList = existingRaw ? JSON.parse(existingRaw) : [];
+          existingList.unshift(newFormRecord);
+          localStorage.setItem('atomos_onboarding_forms', JSON.stringify(existingList));
+        } catch {}
+
+        setSubmittedForm(newFormRecord);
+        setIsSuccess(true);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
       }
-
-      setSubmittedForm(data.form || payload);
-      setIsSuccess(true);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err: any) {
       setErrorMessage(err.message || 'Ocorreu um erro ao enviar os dados. Tente novamente.');
     } finally {
