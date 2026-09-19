@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useRoute } from 'wouter';
 import {
   Sparkles,
@@ -37,8 +37,11 @@ import { DigitalCardLivePreview } from '../components/DigitalCardLivePreview.tsx
 import { CardBillingAlertsManager } from '../components/CardBillingAlertsManager.tsx';
 import { ThemeToggle } from '../components/ThemeToggle.tsx';
 import { buildWhatsAppUrl, sanitizeWhatsAppText } from '../utils/whatsapp.ts';
+import { useAuth } from '../contexts/AuthContext.tsx';
+import { initSupabase, mapDbToDigitalCard, mapDigitalCardToDb } from '../lib/supabase.ts';
 
 export const DeliveryModule: React.FC = () => {
+  const { user } = useAuth();
   const [, params] = useRoute<{ slug?: string }>('/entrega/:slug?');
   const [activeTab, setActiveTab] = useState<'kit' | 'coleta' | 'clonagem' | 'vencimentos'>(() => {
     if (typeof window !== 'undefined') {
@@ -51,10 +54,22 @@ export const DeliveryModule: React.FC = () => {
   });
   
   // Lista de cartões existentes para seleção rápida
-  const [cards, setCards] = useState<DigitalCard[]>([]);
+  const [cards, setCards] = useState<DigitalCard[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('atomos_digital_cards');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch (e) {}
+    }
+    return [];
+  });
   const [selectedCardSlug, setSelectedCardSlug] = useState<string>(params?.slug || '');
   const [currentCard, setCurrentCard] = useState<DigitalCard | null>(null);
   const [loadingCard, setLoadingCard] = useState(false);
+  const [refreshingCards, setRefreshingCards] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedMessage, setCopiedMessage] = useState(false);
 
@@ -84,25 +99,129 @@ export const DeliveryModule: React.FC = () => {
   const [cloning, setCloning] = useState(false);
   const [cloneSuccess, setCloneSuccess] = useState<DigitalCard | null>(null);
 
-  // Carrega cartões existentes para selector
-  const fetchAllCards = async () => {
+  // Carrega cartões existentes para selector (Supabase + API + localStorage fallback)
+  const fetchAllCards = useCallback(async () => {
+    setRefreshingCards(true);
     try {
-      const res = await fetch('/api/cards');
-      if (res.ok) {
-        const data = await res.json();
-        setCards(data);
-        if (data.length > 0 && !selectedCardSlug) {
-          setSelectedCardSlug(data[0].slug);
+      let cardsData: DigitalCard[] = [];
+
+      // 1. Tenta Supabase (se configurado)
+      try {
+        const client = await initSupabase();
+        if (client) {
+          const { data, error } = await client
+            .from('digital_cards')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+          if (!error && data && data.length > 0) {
+            cardsData = data.map(mapDbToDigitalCard);
+          }
         }
+      } catch (err) {
+        console.warn('Kit de Entrega: Falha ao carregar do Supabase:', err);
+      }
+
+      // 2. Se não encontrou no Supabase, tenta API local (/api/cards)
+      if (cardsData.length === 0) {
+        try {
+          const res = await fetch('/api/cards');
+          if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data) && data.length > 0) {
+              cardsData = data;
+            }
+          }
+        } catch (err) {
+          console.warn('Kit de Entrega: Falha ao carregar /api/cards:', err);
+        }
+      }
+
+      // 3. Fallback para localStorage
+      if (cardsData.length === 0) {
+        try {
+          const raw = localStorage.getItem('atomos_digital_cards');
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              cardsData = parsed;
+            }
+          }
+        } catch (err) {
+          console.warn('Kit de Entrega: Falha ao carregar localStorage:', err);
+        }
+      }
+
+      if (cardsData.length > 0) {
+        setCards(cardsData);
+        try {
+          localStorage.setItem('atomos_digital_cards', JSON.stringify(cardsData));
+        } catch (e) {}
+
+        setSelectedCardSlug((prev) => {
+          if (prev && cardsData.some((c) => c.slug === prev)) {
+            return prev;
+          }
+          if (params?.slug && cardsData.some((c) => c.slug === params.slug)) {
+            return params.slug;
+          }
+          return cardsData[0].slug;
+        });
       }
     } catch (err) {
       console.error('Erro ao carregar lista de cartões:', err);
+    } finally {
+      setRefreshingCards(false);
     }
-  };
+  }, [params?.slug]);
 
   useEffect(() => {
     fetchAllCards();
-  }, []);
+  }, [fetchAllCards, user]);
+
+  // Sincronização em tempo real entre abas e componentes
+  useEffect(() => {
+    let channel: BroadcastChannel | null = null;
+    try {
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        channel = new BroadcastChannel('atomos_card_sync');
+        channel.onmessage = (event) => {
+          if (event.data && event.data.card) {
+            const updatedCard: DigitalCard = event.data.card;
+            setCards((prev) => {
+              const idx = prev.findIndex((c) => c.id === updatedCard.id || c.slug === updatedCard.slug);
+              if (idx !== -1) {
+                const next = [...prev];
+                next[idx] = updatedCard;
+                return next;
+              }
+              return [updatedCard, ...prev];
+            });
+            if (updatedCard.slug === selectedCardSlug) {
+              setCurrentCard(updatedCard);
+            }
+          }
+        };
+      }
+    } catch (e) {}
+
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'atomos_digital_cards' && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setCards(parsed);
+          }
+        } catch (_) {}
+      }
+    };
+
+    window.addEventListener('storage', handleStorage);
+    return () => {
+      if (channel) channel.close();
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, [selectedCardSlug]);
 
   // Atualiza slug se vier pela URL
   useEffect(() => {
@@ -117,20 +236,79 @@ export const DeliveryModule: React.FC = () => {
       setCurrentCard(null);
       return;
     }
+
+    let isMounted = true;
     setLoadingCard(true);
-    fetch(`/api/cards/slug/${encodeURIComponent(selectedCardSlug)}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((res) => {
-        if (res && res.data) {
-          setCurrentCard(res.data);
-        } else {
-          // fallback para lista
-          const found = cards.find((c) => c.slug === selectedCardSlug);
-          if (found) setCurrentCard(found);
+
+    const loadCard = async () => {
+      // 1. Verifica no estado local de cartões
+      const foundInMemory = cards.find((c) => c.slug === selectedCardSlug);
+      if (foundInMemory) {
+        if (isMounted) {
+          setCurrentCard(foundInMemory);
+          setLoadingCard(false);
         }
-      })
-      .catch(() => {})
-      .finally(() => setLoadingCard(false));
+        return;
+      }
+
+      // 2. Tenta buscar no Supabase
+      try {
+        const client = await initSupabase();
+        if (client) {
+          const { data, error } = await client
+            .from('digital_cards')
+            .select('*')
+            .eq('slug', selectedCardSlug)
+            .maybeSingle();
+
+          if (!error && data && isMounted) {
+            const mapped = mapDbToDigitalCard(data);
+            setCurrentCard(mapped);
+            setCards((prev) => (prev.some((c) => c.slug === mapped.slug) ? prev : [mapped, ...prev]));
+            setLoadingCard(false);
+            return;
+          }
+        }
+      } catch (e) {}
+
+      // 3. Tenta buscar via API local (/api/cards/slug/...)
+      try {
+        const res = await fetch(`/api/cards/slug/${encodeURIComponent(selectedCardSlug)}`);
+        if (res.ok) {
+          const json = await res.json();
+          if (json && json.data && isMounted) {
+            setCurrentCard(json.data);
+            setCards((prev) => (prev.some((c) => c.slug === json.data.slug) ? prev : [json.data, ...prev]));
+            setLoadingCard(false);
+            return;
+          }
+        }
+      } catch (e) {}
+
+      // 4. Fallback localStorage
+      try {
+        const raw = localStorage.getItem('atomos_digital_cards');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          const found = Array.isArray(parsed) && parsed.find((c: any) => c.slug === selectedCardSlug);
+          if (found && isMounted) {
+            setCurrentCard(found);
+            setLoadingCard(false);
+            return;
+          }
+        }
+      } catch (e) {}
+
+      if (isMounted) {
+        setLoadingCard(false);
+      }
+    };
+
+    loadCard();
+
+    return () => {
+      isMounted = false;
+    };
   }, [selectedCardSlug, cards]);
 
   // URLs geradas
@@ -237,18 +415,69 @@ export const DeliveryModule: React.FC = () => {
         aiAgentGlowEnabled: true,
       };
 
-      const res = await fetch('/api/cards', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+      let createdCard: DigitalCard | null = null;
 
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || 'Erro ao criar cartão.');
+      // 1. Tenta salvar no Supabase (se autenticado ou cliente disponível)
+      if (user) {
+        try {
+          const client = await initSupabase();
+          if (client) {
+            const dbPayload = mapDigitalCardToDb(payload as DigitalCard, user.id);
+            const { data, error } = await client
+              .from('digital_cards')
+              .insert([dbPayload])
+              .select()
+              .single();
+            if (!error && data) {
+              createdCard = mapDbToDigitalCard(data);
+            }
+          }
+        } catch (dbErr) {
+          console.warn('Falha ao salvar no Supabase, tentando API:', dbErr);
+        }
       }
 
-      const createdCard: DigitalCard = await res.json();
+      // 2. Tenta API local se não salvou no Supabase
+      if (!createdCard) {
+        try {
+          const res = await fetch('/api/cards', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+
+          if (res.ok) {
+            createdCard = await res.json();
+          }
+        } catch (apiErr) {
+          console.warn('Falha na API local:', apiErr);
+        }
+      }
+
+      // 3. Fallback objeto local
+      if (!createdCard) {
+        createdCard = {
+          ...payload,
+          id: Date.now(),
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        } as DigitalCard;
+      }
+
+      // Persiste no localStorage e dispara sync
+      try {
+        const raw = localStorage.getItem('atomos_digital_cards');
+        const list = raw ? JSON.parse(raw) : [];
+        list.unshift(createdCard);
+        localStorage.setItem('atomos_digital_cards', JSON.stringify(list));
+
+        if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+          const ch = new BroadcastChannel('atomos_card_sync');
+          ch.postMessage({ type: 'created', card: createdCard });
+          ch.close();
+        }
+      } catch (e) {}
+
       await fetchAllCards();
       setSelectedCardSlug(createdCard.slug);
       setCurrentCard(createdCard);
@@ -285,27 +514,86 @@ export const DeliveryModule: React.FC = () => {
     setCloneSuccess(null);
 
     try {
-      const res = await fetch(`/api/cards/${cloneSourceId}/duplicate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: cloneNewName.trim() || undefined,
-          slug: cloneNewSlug.trim() || undefined,
-        }),
-      });
+      const sourceCard = cards.find((c) => c.id === cloneSourceId);
+      let cloned: DigitalCard | null = null;
 
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || 'Erro ao duplicar cartão.');
+      // 1. Tenta API do servidor
+      try {
+        const res = await fetch(`/api/cards/${cloneSourceId}/duplicate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: cloneNewName.trim() || undefined,
+            slug: cloneNewSlug.trim() || undefined,
+          }),
+        });
+
+        if (res.ok) {
+          cloned = await res.json();
+        }
+      } catch (apiErr) {}
+
+      // 2. Se não duplicou via API e temos o cartão fonte
+      if (!cloned && sourceCard) {
+        const newSlug = (cloneNewSlug.trim() || `${sourceCard.slug}-copia-${Date.now().toString().slice(-4)}`);
+        const newName = (cloneNewName.trim() || `${sourceCard.name} (Cópia)`);
+        const payload: Partial<DigitalCard> = {
+          ...sourceCard,
+          name: newName,
+          slug: newSlug,
+        };
+        delete (payload as any).id;
+
+        if (user) {
+          try {
+            const client = await initSupabase();
+            if (client) {
+              const dbPayload = mapDigitalCardToDb(payload as DigitalCard, user.id);
+              const { data, error } = await client
+                .from('digital_cards')
+                .insert([dbPayload])
+                .select()
+                .single();
+              if (!error && data) {
+                cloned = mapDbToDigitalCard(data);
+              }
+            }
+          } catch (e) {}
+        }
+
+        if (!cloned) {
+          cloned = {
+            ...payload,
+            id: Date.now(),
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          } as DigitalCard;
+        }
       }
 
-      const cloned: DigitalCard = await res.json();
-      await fetchAllCards();
-      setCloneSuccess(cloned);
-      setSelectedCardSlug(cloned.slug);
-      setCurrentCard(cloned);
-      setCloneNewName('');
-      setCloneNewSlug('');
+      if (cloned) {
+        try {
+          const raw = localStorage.getItem('atomos_digital_cards');
+          const list = raw ? JSON.parse(raw) : [];
+          list.unshift(cloned);
+          localStorage.setItem('atomos_digital_cards', JSON.stringify(list));
+
+          if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+            const ch = new BroadcastChannel('atomos_card_sync');
+            ch.postMessage({ type: 'created', card: cloned });
+            ch.close();
+          }
+        } catch (e) {}
+
+        await fetchAllCards();
+        setCloneSuccess(cloned);
+        setSelectedCardSlug(cloned.slug);
+        setCurrentCard(cloned);
+        setCloneNewName('');
+        setCloneNewSlug('');
+      } else {
+        throw new Error('Não foi possível duplicar o cartão.');
+      }
     } catch (err: any) {
       alert(err.message || 'Erro ao clonar cartão.');
     } finally {
@@ -320,6 +608,29 @@ export const DeliveryModule: React.FC = () => {
       setCards((prev) => prev.map((c) => (c.id === updatedCard.id ? updatedCard : c)));
       if (currentCard?.id === updatedCard.id) {
         setCurrentCard(updatedCard);
+      }
+
+      try {
+        const raw = localStorage.getItem('atomos_digital_cards');
+        if (raw) {
+          const list = JSON.parse(raw);
+          const idx = list.findIndex((c: any) => c.id === updatedCard.id || c.slug === updatedCard.slug);
+          if (idx !== -1) {
+            list[idx] = updatedCard;
+            localStorage.setItem('atomos_digital_cards', JSON.stringify(list));
+          }
+        }
+      } catch (e) {}
+
+      // Tenta Supabase
+      if (user) {
+        try {
+          const client = await initSupabase();
+          if (client && typeof updatedCard.id === 'number') {
+            const dbPayload = mapDigitalCardToDb(updatedCard, user.id);
+            await client.from('digital_cards').update(dbPayload).eq('id', updatedCard.id);
+          }
+        } catch (e) {}
       }
 
       // Envia para API se disponível
@@ -356,6 +667,16 @@ export const DeliveryModule: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={fetchAllCards}
+              disabled={refreshingCards}
+              title="Sincronizar / Atualizar lista de cartões"
+              className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition border border-slate-700/80 flex items-center gap-1.5 text-xs font-semibold"
+            >
+              <RefreshCw size={13} className={refreshingCards ? 'animate-spin text-emerald-400' : ''} />
+              <span className="hidden md:inline">Sincronizar</span>
+            </button>
             <a
               href="/app"
               className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition border border-slate-700/80 flex items-center gap-1.5"
@@ -435,7 +756,7 @@ export const DeliveryModule: React.FC = () => {
                 className="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-xs text-slate-200 font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500"
               >
                 {cards.map((c) => (
-                  <option key={c.id} value={c.slug}>
+                  <option key={c.id || c.slug} value={c.slug}>
                     {c.name} (/cartao/{c.slug})
                   </option>
                 ))}
@@ -474,15 +795,26 @@ export const DeliveryModule: React.FC = () => {
                 </div>
                 <h3 className="text-base font-bold text-white">Nenhum Cartão Disponível</h3>
                 <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
-                  Crie seu primeiro cartão usando o formulário de coleta rápida ou vá para o painel principal.
+                  Crie seu primeiro cartão usando o formulário de coleta rápida, ou clique em sincronizar caso já tenha criado no painel.
                 </p>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('coleta')}
-                  className="px-5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs shadow-lg transition"
-                >
-                  Preencher Formulário de Coleta
-                </button>
+                <div className="flex items-center justify-center gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={fetchAllCards}
+                    disabled={refreshingCards}
+                    className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs border border-slate-700 flex items-center gap-2 transition"
+                  >
+                    <RefreshCw size={14} className={refreshingCards ? 'animate-spin text-emerald-400' : ''} />
+                    <span>Sincronizar com Banco de Dados</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('coleta')}
+                    className="px-5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs shadow-lg transition"
+                  >
+                    Preencher Formulário de Coleta
+                  </button>
+                </div>
               </div>
             )}
 
