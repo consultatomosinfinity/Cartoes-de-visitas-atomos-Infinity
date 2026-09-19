@@ -792,7 +792,9 @@ export const DigitalCardsManager: React.FC = () => {
 
         const dbPayload = mapDigitalCardToDb(editingCard, user.id);
 
-        if (isNew || !editingCard.id) {
+        const isStringTempId = typeof editingCard.id === 'string' && (editingCard.id.startsWith('card-') || isNaN(Number(editingCard.id)));
+
+        if (isNew || !editingCard.id || isStringTempId) {
           const { data, error } = await client
             .from('digital_cards')
             .insert([dbPayload])
@@ -801,10 +803,11 @@ export const DigitalCardsManager: React.FC = () => {
           if (error) throw error;
           savedCard = mapDbToDigitalCard(data);
         } else {
+          const numericId = Number(editingCard.id);
           const { data, error } = await client
             .from('digital_cards')
             .update(dbPayload)
-            .eq('id', editingCard.id)
+            .eq('id', numericId)
             .select()
             .single();
           if (error) throw error;
