@@ -43,6 +43,8 @@ export interface SystemSettings {
   allowPublicRegistration: boolean; // Se true, cadastro público aberto; se false, apenas Master cadastra
   masterWhatsApp?: string; // WhatsApp de contato do Master
   customWelcomeMessage?: string;
+  platformLogoUrl?: string; // URL ou Base64 do logotipo master da plataforma
+  platformTitle?: string; // Título/Nome principal da plataforma
   updatedAt?: string;
 }
 

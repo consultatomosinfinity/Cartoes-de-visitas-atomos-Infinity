@@ -209,6 +209,8 @@ const DEFAULT_SYSTEM_SETTINGS = {
   allowPublicRegistration: true, // Padrão mantido: aberto
   masterWhatsApp: '+55 (15) 99625-9353',
   customWelcomeMessage: '',
+  platformLogoUrl: '/logo-atomos.svg',
+  platformTitle: 'Átomos Infinity',
   updatedAt: new Date().toISOString(),
 };
 
@@ -1375,6 +1377,8 @@ app.put('/api/system-settings', (req, res) => {
       allowPublicRegistration,
       masterWhatsApp,
       customWelcomeMessage,
+      platformLogoUrl,
+      platformTitle,
     } = req.body;
 
     const updated = {
@@ -1388,6 +1392,8 @@ app.put('/api/system-settings', (req, res) => {
       ...(allowPublicRegistration !== undefined ? { allowPublicRegistration: Boolean(allowPublicRegistration) } : {}),
       ...(masterWhatsApp !== undefined ? { masterWhatsApp: String(masterWhatsApp).trim() } : {}),
       ...(customWelcomeMessage !== undefined ? { customWelcomeMessage: String(customWelcomeMessage) } : {}),
+      ...(platformLogoUrl !== undefined ? { platformLogoUrl: String(platformLogoUrl).trim() } : {}),
+      ...(platformTitle !== undefined ? { platformTitle: String(platformTitle).trim() } : {}),
       updatedAt: new Date().toISOString(),
     };
 

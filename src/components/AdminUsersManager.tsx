@@ -1657,7 +1657,7 @@ Qualquer ajuste de dados, telefones ou ativação de novos recursos é só falar
                 </button>
               </div>
 
-              {/* 5. WhatsApp do Master para Notificações & Contato */}
+               {/* 5. WhatsApp do Master para Notificações & Contato */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
                   <MessageCircle className="w-4 h-4 text-emerald-500" />
@@ -1675,6 +1675,92 @@ Qualquer ajuste de dados, telefones ou ativação de novos recursos é só falar
                 <p className="text-[11px] text-gray-400">
                   Número que receberá as mensagens dos clientes solicitando aprovação ou entrega de cartão.
                 </p>
+              </div>
+
+              {/* 6. Logotipo Master da Plataforma & Título */}
+              <div className="space-y-4 p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 text-amber-500" />
+                    Título / Nome Principal da Plataforma
+                  </label>
+                  <input
+                    type="text"
+                    value={systemSettings.platformTitle || 'Átomos Infinity'}
+                    onChange={(e) =>
+                      setSystemSettings({ ...systemSettings, platformTitle: e.target.value })
+                    }
+                    placeholder="Átomos Infinity"
+                    className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white outline-none font-bold"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                    <Layers className="w-4 h-4 text-sky-500" />
+                    Logotipo Master da Plataforma (URL ou Upload)
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 flex items-center justify-center p-1 overflow-hidden shrink-0 shadow-sm">
+                      {systemSettings.platformLogoUrl ? (
+                        <img
+                          src={systemSettings.platformLogoUrl}
+                          alt="Logo Master"
+                          className="w-full h-full object-contain"
+                          onError={(e) => {
+                            (e.target as HTMLElement).style.display = 'none';
+                          }}
+                        />
+                      ) : (
+                        <Sparkles className="w-5 h-5 text-amber-500" />
+                      )}
+                    </div>
+                    <div className="flex-1 space-y-1">
+                      <input
+                        type="text"
+                        value={systemSettings.platformLogoUrl || '/logo-atomos.svg'}
+                        onChange={(e) =>
+                          setSystemSettings({ ...systemSettings, platformLogoUrl: e.target.value })
+                        }
+                        placeholder="/logo-atomos.svg ou https://..."
+                        className="w-full px-3.5 py-2 text-xs rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white outline-none font-mono"
+                      />
+                      <div className="flex items-center gap-2">
+                        <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-[11px] font-bold shadow-sm transition">
+                          <span>Enviar Imagem do Computador</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                const reader = new FileReader();
+                                reader.onload = (uploadEvt) => {
+                                  const result = uploadEvt.target?.result as string;
+                                  if (result) {
+                                    setSystemSettings({ ...systemSettings, platformLogoUrl: result });
+                                  }
+                                };
+                                reader.readAsDataURL(file);
+                              }
+                            }}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setSystemSettings({ ...systemSettings, platformLogoUrl: '/logo-atomos.svg' })}
+                          className="px-2.5 py-1.5 text-[11px] font-semibold text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 bg-gray-200 dark:bg-gray-700 rounded-lg transition"
+                        >
+                          Restaurar Padrão
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-gray-400">
+                    Este logotipo substitui o ícone/marca padrão em toda a plataforma, painéis e cartões.
+                  </p>
+                </div>
               </div>
 
               {/* Ações do Modal */}
