@@ -55,6 +55,115 @@ export function ClientOnboardingFormsManager({ onCardCreated, onOpenCard }: Clie
   const [customRepName, setCustomRepName] = useState('');
   const [copiedCustomLink, setCopiedCustomLink] = useState(false);
 
+  // Helper para otimização de imagem no manager
+  const optimizeImageFile = async (file: File, maxDimension = 1000, quality = 0.9): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+          if (width > maxDimension || height > maxDimension) {
+            if (width > height) {
+              height = Math.round((height * maxDimension) / width);
+              width = maxDimension;
+            } else {
+              width = Math.round((width * maxDimension) / height);
+              height = maxDimension;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            reject(new Error('Canvas context not available'));
+            return;
+          }
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.onerror = reject;
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const downloadImage = async (url: string, filename: string) => {
+    if (!url) return;
+    try {
+      if (url.startsWith('data:')) {
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        return;
+      }
+      const response = await fetch(url, { mode: 'cors' });
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch {
+      window.open(url, '_blank');
+    }
+  };
+
+  const handleUploadEnhancedImage = async (formId: string, type: 'photo' | 'logo', file: File) => {
+    try {
+      const base64 = await optimizeImageFile(file, type === 'photo' ? 1000 : 800, 0.92);
+      const payload = type === 'photo' ? { photoUrl: base64 } : { logoUrl: base64 };
+
+      const res = await fetch(`/api/onboarding-forms/${formId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...payload, syncToCard: true }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setForms((prev) => prev.map((f) => (f.id === formId ? { ...f, ...payload, updatedAt: new Date().toISOString() } : f)));
+        if (selectedForm && selectedForm.id === formId) {
+          setSelectedForm((prev) => (prev ? { ...prev, ...payload } : null));
+        }
+        setActionSuccessMessage(
+          `${type === 'photo' ? 'Foto de Perfil' : 'Logotipo'} melhorado(a) e enviado(a) com sucesso! ${
+            data.card ? 'Sincronizado automaticamente com o Cartão Digital.' : ''
+          }`
+        );
+        setTimeout(() => setActionSuccessMessage(null), 5000);
+      }
+    } catch (err: any) {
+      setErrorMessage('Erro ao enviar imagem melhorada.');
+    }
+  };
+
+  const handleSyncToCard = async (form: ClientOnboardingForm) => {
+    try {
+      const res = await fetch(`/api/onboarding-forms/${form.id}/sync-to-card`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ photoUrl: form.photoUrl, logoUrl: form.logoUrl }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro ao sincronizar.');
+      setActionSuccessMessage(`Foto e Logo sincronizados com sucesso no Cartão de "${form.fullName}"!`);
+      setTimeout(() => setActionSuccessMessage(null), 5000);
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Erro ao sincronizar com o cartão.');
+    }
+  };
+
   // Carregar formulários
   const fetchForms = async () => {
     try {
@@ -742,36 +851,117 @@ export function ClientOnboardingFormsManager({ onCardCreated, onOpenCard }: Clie
                   </div>
                 </div>
 
-                {/* Imagens (Foto e Logo) */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-200 dark:border-slate-700 text-center space-y-2">
-                    <span className="font-bold text-slate-500 block">Foto de Perfil</span>
-                    {selectedForm.photoUrl ? (
-                      <img
-                        src={selectedForm.photoUrl}
-                        alt="Foto"
-                        className="w-24 h-24 rounded-2xl object-cover mx-auto border border-slate-300 dark:border-slate-600 shadow-sm"
-                      />
-                    ) : (
-                      <div className="w-24 h-24 rounded-2xl bg-slate-200 dark:bg-slate-700 flex items-center justify-center mx-auto text-slate-400">
-                        Sem Foto
-                      </div>
+                {/* Imagens (Foto e Logo) com opções para Baixar, Melhorar e Sincronizar */}
+                <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-3xl border border-slate-200 dark:border-slate-700 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-xs font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+                        Gerenciamento de Imagens (Foto & Logotipo)
+                      </h4>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        Baixe para tratar no Canva/Photoshop, envie a versão melhorada e sincronize com o cartão.
+                      </p>
+                    </div>
+
+                    {selectedForm.generatedCardId && (
+                      <button
+                        type="button"
+                        onClick={() => handleSyncToCard(selectedForm)}
+                        className="py-1.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] flex items-center gap-1.5 shadow-sm transition-all"
+                        title="Enviar fotos atuais diretamente para o Cartão Digital"
+                      >
+                        <Zap size={13} className="text-amber-300 fill-amber-300" />
+                        <span>⚡ Sincronizar com o Cartão</span>
+                      </button>
                     )}
                   </div>
 
-                  <div className="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-200 dark:border-slate-700 text-center space-y-2">
-                    <span className="font-bold text-slate-500 block">Logotipo</span>
-                    {selectedForm.logoUrl ? (
-                      <img
-                        src={selectedForm.logoUrl}
-                        alt="Logo"
-                        className="w-24 h-24 rounded-2xl object-contain bg-white p-2 mx-auto border border-slate-300 dark:border-slate-600 shadow-sm"
-                      />
-                    ) : (
-                      <div className="w-24 h-24 rounded-2xl bg-slate-200 dark:bg-slate-700 flex items-center justify-center mx-auto text-slate-400">
-                        Sem Logo
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Foto de Perfil */}
+                    <div className="p-3.5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 flex flex-col items-center text-center space-y-3">
+                      <span className="font-bold text-slate-700 dark:text-slate-300 text-xs">Foto de Perfil</span>
+                      {selectedForm.photoUrl ? (
+                        <div className="relative">
+                          <img
+                            src={selectedForm.photoUrl}
+                            alt="Foto"
+                            className="w-24 h-24 rounded-full object-cover border-2 border-slate-200 dark:border-slate-700 shadow-sm"
+                          />
+                        </div>
+                      ) : (
+                        <div className="w-24 h-24 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 text-xs">
+                          Sem Foto
+                        </div>
+                      )}
+
+                      <div className="flex flex-wrap items-center justify-center gap-1.5 w-full pt-1">
+                        {selectedForm.photoUrl && (
+                          <button
+                            type="button"
+                            onClick={() => downloadImage(selectedForm.photoUrl, `foto_${selectedForm.fullName.replace(/\s+/g, '_')}.jpg`)}
+                            className="py-1 px-2.5 rounded-lg bg-sky-50 dark:bg-sky-950/50 hover:bg-sky-100 text-sky-700 dark:text-sky-300 font-bold text-[11px] flex items-center gap-1 transition-colors"
+                            title="Baixar foto para tratar"
+                          >
+                            <span>📥 Baixar</span>
+                          </button>
+                        )}
+                        <label className="py-1 px-2.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/50 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 font-bold text-[11px] flex items-center gap-1 cursor-pointer transition-colors">
+                          <span>✨ Upar Tratada</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) handleUploadEnhancedImage(selectedForm.id, 'photo', file);
+                            }}
+                            className="hidden"
+                          />
+                        </label>
                       </div>
-                    )}
+                    </div>
+
+                    {/* Logotipo */}
+                    <div className="p-3.5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 flex flex-col items-center text-center space-y-3">
+                      <span className="font-bold text-slate-700 dark:text-slate-300 text-xs">Logotipo da Empresa</span>
+                      {selectedForm.logoUrl ? (
+                        <div className="relative">
+                          <img
+                            src={selectedForm.logoUrl}
+                            alt="Logo"
+                            className="w-24 h-24 rounded-2xl object-contain bg-slate-100 dark:bg-slate-800 p-2 border-2 border-slate-200 dark:border-slate-700 shadow-sm"
+                          />
+                        </div>
+                      ) : (
+                        <div className="w-24 h-24 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 text-xs">
+                          Sem Logo
+                        </div>
+                      )}
+
+                      <div className="flex flex-wrap items-center justify-center gap-1.5 w-full pt-1">
+                        {selectedForm.logoUrl && (
+                          <button
+                            type="button"
+                            onClick={() => downloadImage(selectedForm.logoUrl, `logo_${(selectedForm.companyName || selectedForm.fullName).replace(/\s+/g, '_')}.png`)}
+                            className="py-1 px-2.5 rounded-lg bg-sky-50 dark:bg-sky-950/50 hover:bg-sky-100 text-sky-700 dark:text-sky-300 font-bold text-[11px] flex items-center gap-1 transition-colors"
+                            title="Baixar logotipo para tratar"
+                          >
+                            <span>📥 Baixar</span>
+                          </button>
+                        )}
+                        <label className="py-1 px-2.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/50 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 font-bold text-[11px] flex items-center gap-1 cursor-pointer transition-colors">
+                          <span>✨ Upar Tratado</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) handleUploadEnhancedImage(selectedForm.id, 'logo', file);
+                            }}
+                            className="hidden"
+                          />
+                        </label>
+                      </div>
+                    </div>
                   </div>
                 </div>
 

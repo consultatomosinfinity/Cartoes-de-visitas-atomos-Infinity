@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <radialGradient id="bgGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#1e293b" />
+      <stop offset="100%" stop-color="#090d16" />
+    </radialGradient>
+    <linearGradient id="cyanGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#0284c7" />
+    </linearGradient>
+    <linearGradient id="goldGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fde047" />
+      <stop offset="100%" stop-color="#eab308" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="8" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+  <!-- Fundo Circular -->
+  <circle cx="256" cy="256" r="248" fill="url(#bgGrad)" stroke="#38bdf8" stroke-width="4" opacity="0.95" />
+  
+  <!-- Símbolo do Infinito (Átomos Infinity) -->
+  <g filter="url(#glow)" transform="translate(0, -15)">
+    <!-- Lado Esquerdo (Cyan) -->
+    <path d="M 256 256 C 210 210, 130 210, 90 256 C 50 302, 110 362, 170 322 C 210 295, 235 272, 256 256 Z" fill="none" stroke="url(#cyanGlow)" stroke-width="26" stroke-linecap="round" />
+    <path d="M 256 256 C 210 302, 130 302, 90 256 C 50 210, 110 150, 170 190 C 210 217, 235 240, 256 256 Z" fill="none" stroke="url(#cyanGlow)" stroke-width="26" stroke-linecap="round" />
+    
+    <!-- Lado Direito (Gold) -->
+    <path d="M 256 256 C 302 210, 382 210, 422 256 C 462 302, 402 362, 342 322 C 302 295, 277 272, 256 256 Z" fill="none" stroke="url(#goldGlow)" stroke-width="26" stroke-linecap="round" />
+    <path d="M 256 256 C 302 302, 382 302, 422 256 C 462 210, 402 150, 342 190 C 302 217, 277 240, 256 256 Z" fill="none" stroke="url(#goldGlow)" stroke-width="26" stroke-linecap="round" />
+  </g>
+
+  <!-- Texto ÁTOMOS INFINITY -->
+  <text x="256" y="395" font-family="'Manrope', 'DM Sans', sans-serif" font-size="44" font-weight="900" fill="#f8fafc" text-anchor="middle" letter-spacing="4">ÁTOMOS</text>
+  <text x="256" y="435" font-family="'Manrope', 'DM Sans', sans-serif" font-size="34" font-weight="800" fill="#38bdf8" text-anchor="middle" letter-spacing="6">INFINITY</text>
+</svg>
