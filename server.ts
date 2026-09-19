@@ -49,10 +49,43 @@ const DEFAULT_WALLPAPERS_DATA = {
     { id: 'tecnologia', name: 'Tecnologia & Inovação', description: 'Linhas digitais, conexões e visual moderno', icon: 'Cpu', order: 2 },
     { id: 'gradientes', name: 'Gradientes & Modernos', description: 'Transições suaves de cores vibrantes e elegantes', icon: 'Palette', order: 3 },
     { id: 'texturas', name: 'Texturas & Minimalistas', description: 'Padrões geométricos discretos e neutros', icon: 'Layers', order: 4 },
-    { id: 'icones-logos', name: 'Ícones, Logos & Favicons', description: 'Modelos padrão para logomarca, ícone de celular e favicon da aba', icon: 'Sparkles', order: 5 },
-    { id: 'avatares', name: 'Avatares & Fotos Padrão', description: 'Avatares ilustrados e fotos de perfil padrão', icon: 'User', order: 6 },
+    { id: 'atomosinfinity', name: 'Átomos Infinity', description: 'Logotipos, ícones e elementos oficiais da marca', icon: 'Sparkles', order: 5 },
+    { id: 'icones-logos', name: 'Ícones, Logos & Favicons', description: 'Modelos padrão para logomarca, ícone de celular e favicon da aba', icon: 'Sparkles', order: 6 },
+    { id: 'avatares', name: 'Avatares & Fotos Padrão', description: 'Avatares ilustrados e fotos de perfil padrão', icon: 'User', order: 7 },
   ],
   items: [
+    {
+      id: 'logo-oficial-atomos',
+      title: 'Logotipo Oficial Átomos Infinity',
+      folderId: 'atomosinfinity',
+      url: '/logo-atomos.svg',
+      thumbnailUrl: '/logo-atomos.svg',
+      recommendedTheme: 'personalizado',
+    },
+    {
+      id: 'favicon-atomos',
+      title: 'Favicon Átomos Infinity',
+      folderId: 'atomosinfinity',
+      url: '/favicon-atomos.svg',
+      thumbnailUrl: '/favicon-atomos.svg',
+      recommendedTheme: 'personalizado',
+    },
+    {
+      id: 'icon-192-atomos',
+      title: 'Ícone PWA 192x192 Átomos',
+      folderId: 'atomosinfinity',
+      url: '/icon-192.png',
+      thumbnailUrl: '/icon-192.png',
+      recommendedTheme: 'personalizado',
+    },
+    {
+      id: 'icon-512-atomos',
+      title: 'Ícone PWA 512x512 Átomos',
+      folderId: 'atomosinfinity',
+      url: '/icon-512.png',
+      thumbnailUrl: '/icon-512.png',
+      recommendedTheme: 'personalizado',
+    },
     {
       id: 'avatar-gato-gravata',
       title: 'Gato de Gravata Executivo',
@@ -142,7 +175,30 @@ function getWallpapersData() {
     writeJson(WALLPAPERS_FILE, DEFAULT_WALLPAPERS_DATA);
     return DEFAULT_WALLPAPERS_DATA;
   }
-  return existing;
+
+  // Mescla pastas e itens padrão para garantir que Atomosinfinity e logotipos oficiais nunca sumam
+  let updated = false;
+  const folders = [...existing.folders];
+  for (const defFolder of DEFAULT_WALLPAPERS_DATA.folders) {
+    if (!folders.some((f: any) => f.id === defFolder.id)) {
+      folders.push(defFolder);
+      updated = true;
+    }
+  }
+
+  const items = [...existing.items];
+  for (const defItem of DEFAULT_WALLPAPERS_DATA.items) {
+    if (!items.some((i: any) => i.id === defItem.id || i.url === defItem.url)) {
+      items.unshift(defItem);
+      updated = true;
+    }
+  }
+
+  const result = { folders, items };
+  if (updated) {
+    writeJson(WALLPAPERS_FILE, result);
+  }
+  return result;
 }
 
 const DEFAULT_SYSTEM_SETTINGS = {
@@ -1534,15 +1590,20 @@ app.post('/api/wallpapers/items/batch', (req, res) => {
       let finalUrl = item.url ? item.url.trim() : '';
 
       if (item.base64Data) {
-        const match = item.base64Data.match(/^data:image\/([a-zA-Z0-9+]+);base64,(.+)$/);
-        if (match) {
-          const ext = match[1] === 'jpeg' ? 'jpg' : match[1];
-          const buffer = Buffer.from(match[2], 'base64');
-          const cleanName = (item.fileName || title || 'wallpaper').toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 30);
-          const savedFileName = `${Date.now()}-${i}-${cleanName}.${ext}`;
-          const savePath = path.join(wallpapersDir, savedFileName);
-          fs.writeFileSync(savePath, buffer);
-          finalUrl = `/wallpapers/${savedFileName}`;
+        // Usa o base64 diretamente como Data URL para garantir 100% de persistência no JSON e Vercel
+        finalUrl = item.base64Data;
+        try {
+          const match = item.base64Data.match(/^data:image\/([a-zA-Z0-9+]+);base64,(.+)$/);
+          if (match) {
+            const ext = match[1] === 'jpeg' ? 'jpg' : match[1];
+            const buffer = Buffer.from(match[2], 'base64');
+            const cleanName = (item.fileName || title || 'wallpaper').toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 30);
+            const savedFileName = `${Date.now()}-${i}-${cleanName}.${ext}`;
+            const savePath = path.join(wallpapersDir, savedFileName);
+            fs.writeFileSync(savePath, buffer);
+          }
+        } catch {
+          // Ignora se o disco for somente leitura em serverless
         }
       }
 
@@ -1580,21 +1641,25 @@ app.post('/api/wallpapers/items', (req, res) => {
 
     let finalUrl = url ? url.trim() : '';
 
-    // Se foi enviado arquivo base64, salva no diretório estático public/wallpapers
+    // Se foi enviado arquivo base64, usa como Data URL para persistência garantida no JSON/Vercel
     if (base64Data) {
-      const match = base64Data.match(/^data:image\/([a-zA-Z0-9+]+);base64,(.+)$/);
-      if (match) {
-        const ext = match[1] === 'jpeg' ? 'jpg' : match[1];
-        const buffer = Buffer.from(match[2], 'base64');
-        const cleanName = (fileName || 'wallpaper').toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 30);
-        const savedFileName = `${Date.now()}-${cleanName}.${ext}`;
-        const wallpapersDir = path.join(process.cwd(), 'public', 'wallpapers');
-        if (!fs.existsSync(wallpapersDir)) {
-          fs.mkdirSync(wallpapersDir, { recursive: true });
+      finalUrl = base64Data;
+      try {
+        const match = base64Data.match(/^data:image\/([a-zA-Z0-9+]+);base64,(.+)$/);
+        if (match) {
+          const ext = match[1] === 'jpeg' ? 'jpg' : match[1];
+          const buffer = Buffer.from(match[2], 'base64');
+          const cleanName = (fileName || 'wallpaper').toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 30);
+          const savedFileName = `${Date.now()}-${cleanName}.${ext}`;
+          const wallpapersDir = path.join(process.cwd(), 'public', 'wallpapers');
+          if (!fs.existsSync(wallpapersDir)) {
+            fs.mkdirSync(wallpapersDir, { recursive: true });
+          }
+          const savePath = path.join(wallpapersDir, savedFileName);
+          fs.writeFileSync(savePath, buffer);
         }
-        const savePath = path.join(wallpapersDir, savedFileName);
-        fs.writeFileSync(savePath, buffer);
-        finalUrl = `/wallpapers/${savedFileName}`;
+      } catch {
+        // Ignora se o disco for somente leitura
       }
     }
 
