@@ -29,6 +29,7 @@ import {
   Send,
   Layers,
   Zap,
+  Star,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ClientOnboardingForm, OnboardingFormStatus, DigitalCard } from '../types.ts';
@@ -241,6 +242,12 @@ export function ClientOnboardingFormsManager({ onCardCreated, onOpenCard }: Clie
         contentBackgroundUrl: form.contentBackgroundUrl || '',
         instagramHandle: form.instagramHandle,
         websiteUrl: form.websiteUrl,
+        googleReviewUrl: form.googleReviewUrl,
+        googleMapsUrl: form.googleMapsUrl,
+        businessHours: form.businessHours || '',
+        businessHoursEnabled: form.businessHoursEnabled !== false,
+        hideBusinessHours: Boolean(form.hideBusinessHours),
+        businessHoursStatus: form.businessHoursStatus || 'Funcionamento',
         linkedinUrl: form.linkedinUrl,
         facebookUrl: form.facebookUrl,
         youtubeUrl: form.youtubeUrl,
@@ -1110,6 +1117,60 @@ export function ClientOnboardingFormsManager({ onCardCreated, onOpenCard }: Clie
                       <span className="text-slate-400 block text-[11px]">Site / Loja:</span>
                       <span className="font-semibold">{selectedForm.websiteUrl || '-'}</span>
                     </div>
+                    {selectedForm.businessHours && (
+                      <div className="sm:col-span-2 p-3 rounded-xl bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-800/60 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-bold text-sky-900 dark:text-sky-300 flex items-center gap-1.5">
+                            <Clock size={13} className="text-sky-600" />
+                            <span>Dias e Horários de Atendimento:</span>
+                          </span>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-sky-100 dark:bg-sky-900 text-sky-800 dark:text-sky-200">
+                            {selectedForm.hideBusinessHours ? 'Ocultado pelo Cliente' : (selectedForm.businessHoursStatus || 'Funcionamento')}
+                          </span>
+                        </div>
+                        <p className="text-xs font-semibold text-slate-800 dark:text-slate-200 whitespace-pre-line leading-relaxed">
+                          {selectedForm.businessHours}
+                        </p>
+                      </div>
+                    )}
+                    {selectedForm.googleReviewUrl && (
+                      <div className="sm:col-span-2 p-2 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <Star size={14} className="text-amber-500 fill-amber-500 shrink-0" />
+                          <div className="min-w-0">
+                            <span className="text-[10px] font-bold text-amber-900 dark:text-amber-200 block">
+                              Link de Avaliação no Google:
+                            </span>
+                            <span className="text-xs font-semibold text-amber-700 dark:text-amber-300 truncate block">
+                              {selectedForm.googleReviewUrl}
+                            </span>
+                          </div>
+                        </div>
+                        <a
+                          href={selectedForm.googleReviewUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="px-2 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-bold text-[11px] shrink-0 transition-colors flex items-center gap-1"
+                        >
+                          <ExternalLink size={11} />
+                          <span>Testar</span>
+                        </a>
+                      </div>
+                    )}
+                    {selectedForm.googleMapsUrl && (
+                      <div className="sm:col-span-2">
+                        <span className="text-slate-400 block text-[11px]">Google Maps:</span>
+                        <a
+                          href={selectedForm.googleMapsUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-xs font-semibold text-rose-600 hover:underline flex items-center gap-1"
+                        >
+                          <ExternalLink size={11} />
+                          <span className="truncate">{selectedForm.googleMapsUrl}</span>
+                        </a>
+                      </div>
+                    )}
                     {selectedForm.customLinkName && (
                       <div className="sm:col-span-2">
                         <span className="text-slate-400 block text-[11px]">Botão de Ação Especial:</span>

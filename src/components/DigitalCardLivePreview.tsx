@@ -19,6 +19,7 @@ import {
   Sparkles,
   Star,
   Send,
+  Clock,
 } from 'lucide-react';
 import { DigitalCard } from '../types.ts';
 import { getContrastTextColor, isConfiguredLink, hexToRgba, getCardContentContrastColors, isNeumorphismTheme, getNeumorphicCardStyles, isGlassmorphismTheme, getGlassmorphicCardStyles } from '../../shared/digital-card-appearance.ts';
@@ -311,7 +312,8 @@ export const DigitalCardLivePreview: React.FC<DigitalCardLivePreviewProps> = ({ 
   );
   const hasGoogleReview = isConfiguredLink(card.googleReviewUrl);
   const hasPix = Boolean(card.pixKey && card.pixKey.trim());
-  const hasContacts = hasWhatsapp || hasPhone || hasEmail || hasWebsite || hasAddress || hasGoogleReview || hasPix;
+  const hasBusinessHours = Boolean(card.businessHours && card.businessHours.trim() && !card.hideBusinessHours && card.businessHoursEnabled !== false);
+  const hasContacts = hasWhatsapp || hasPhone || hasEmail || hasWebsite || hasAddress || hasGoogleReview || hasPix || hasBusinessHours;
 
   const hasInstagram = isConfiguredLink(card.instagramUrl);
   const hasLinkedin = isConfiguredLink(card.linkedinUrl);
@@ -877,6 +879,46 @@ export const DigitalCardLivePreview: React.FC<DigitalCardLivePreviewProps> = ({ 
                         <span className="text-[10px] font-bold text-white bg-amber-500 px-2 py-0.5 rounded-md shrink-0 shadow-2xs">
                           Avaliar ↗
                         </span>
+                      </div>
+                    )}
+                    {hasBusinessHours && (
+                      <div
+                        className="flex items-start gap-2 p-2.5 rounded-xl text-xs transition-all"
+                        style={{
+                          backgroundColor: isNeu ? itemBg : (contentContrast.isDarkBg ? 'rgba(59, 130, 246, 0.12)' : '#EFF6FF'),
+                          boxShadow: itemShadow,
+                          border: isNeu ? itemBorder : (contentContrast.isDarkBg ? '1px solid rgba(59, 130, 246, 0.3)' : '1px solid #BFDBFE'),
+                          color: itemColor,
+                        }}
+                      >
+                        <div className="w-5 h-5 rounded-md bg-sky-600 text-white flex items-center justify-center shrink-0 shadow-2xs mt-0.5">
+                          <Clock size={12} className="text-white" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-1 mb-0.5">
+                            <span
+                              className="text-[10px] font-bold block"
+                              style={{ color: isNeu ? itemColor : (contentContrast.isDarkBg ? '#93C5FD' : '#1E40AF') }}
+                            >
+                              Horário de Atendimento
+                            </span>
+                            <span
+                              className="text-[9px] font-bold px-1.5 py-0.2 rounded"
+                              style={{
+                                backgroundColor: contentContrast.isDarkBg ? 'rgba(59, 130, 246, 0.25)' : '#DBEAFE',
+                                color: contentContrast.isDarkBg ? '#BFDBFE' : '#1D4ED8',
+                              }}
+                            >
+                              {card.businessHoursStatus || 'Funcionamento'}
+                            </span>
+                          </div>
+                          <div
+                            className="text-[11px] font-medium leading-tight whitespace-pre-line"
+                            style={{ color: isNeu ? itemColor : (contentContrast.isDarkBg ? '#F1F5F9' : '#1E293B') }}
+                          >
+                            {card.businessHours}
+                          </div>
+                        </div>
                       </div>
                     )}
                     {hasPix && (

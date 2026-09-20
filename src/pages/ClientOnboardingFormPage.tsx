@@ -29,6 +29,7 @@ import {
   Check,
   RefreshCw,
   Upload,
+  Star,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ThemeToggle } from '../components/ThemeToggle.tsx';
@@ -170,6 +171,8 @@ export function ClientOnboardingFormPage() {
   // Redes e Links
   const [instagramHandle, setInstagramHandle] = useState('');
   const [websiteUrl, setWebsiteUrl] = useState('');
+  const [googleReviewUrl, setGoogleReviewUrl] = useState('');
+  const [googleMapsUrl, setGoogleMapsUrl] = useState('');
   const [linkedinUrl, setLinkedinUrl] = useState('');
   const [facebookUrl, setFacebookUrl] = useState('');
   const [youtubeUrl, setYoutubeUrl] = useState('');
@@ -181,6 +184,12 @@ export function ClientOnboardingFormPage() {
   const [pixKey, setPixKey] = useState('');
   const [pixType, setPixType] = useState<'cpf' | 'cnpj' | 'email' | 'telefone' | 'aleatoria'>('telefone');
   const [pixBeneficiary, setPixBeneficiary] = useState('');
+
+  // Horário de Funcionamento (Atendimento)
+  const [businessHours, setBusinessHours] = useState('');
+  const [businessHoursEnabled, setBusinessHoursEnabled] = useState(true);
+  const [hideBusinessHours, setHideBusinessHours] = useState(false);
+  const [businessHoursStatus, setBusinessHoursStatus] = useState('Horário Comercial');
 
   // Estilo e Observações
   const [preferredTheme, setPreferredTheme] = useState('azul_corporativo');
@@ -255,6 +264,8 @@ export function ClientOnboardingFormPage() {
         contentBackgroundUrl,
         instagramHandle: instagramHandle.trim(),
         websiteUrl: websiteUrl.trim(),
+        googleReviewUrl: googleReviewUrl.trim(),
+        googleMapsUrl: googleMapsUrl.trim(),
         linkedinUrl: linkedinUrl.trim(),
         facebookUrl: facebookUrl.trim(),
         youtubeUrl: youtubeUrl.trim(),
@@ -264,6 +275,10 @@ export function ClientOnboardingFormPage() {
         pixKey: pixKey.trim(),
         pixType,
         pixBeneficiary: pixBeneficiary.trim(),
+        businessHours: businessHours.trim(),
+        businessHoursEnabled: businessHoursEnabled && !hideBusinessHours,
+        hideBusinessHours,
+        businessHoursStatus: businessHoursStatus.trim(),
         preferredTheme,
         notes: notes.trim(),
       };
@@ -679,6 +694,121 @@ export function ClientOnboardingFormPage() {
                   className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all text-slate-800 dark:text-slate-100"
                 />
               </div>
+
+              {/* DIAS E HORÁRIOS DE FUNCIONAMENTO (COM CHECKBOX PARA OCULTAR/EXIBIR) */}
+              <div className="sm:col-span-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <div className="bg-sky-50/50 dark:bg-slate-800/60 p-4 sm:p-5 rounded-2xl border border-sky-100 dark:border-slate-700 space-y-4">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-xl bg-sky-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                        <Clock size={16} />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                          Dias & Horários de Atendimento (Funcionamento)
+                        </h4>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                          Permite que seus clientes consultem seus horários de atendimento direto no cartão
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Checkbox para ocultar / exibir */}
+                    <label className="flex items-center gap-2 cursor-pointer select-none bg-white dark:bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs">
+                      <input
+                        type="checkbox"
+                        checked={!hideBusinessHours && businessHoursEnabled}
+                        onChange={(e) => {
+                          const isChecked = e.target.checked;
+                          setHideBusinessHours(!isChecked);
+                          setBusinessHoursEnabled(isChecked);
+                        }}
+                        className="w-4 h-4 text-sky-600 rounded border-slate-300 focus:ring-sky-500"
+                      />
+                      <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                        {!hideBusinessHours && businessHoursEnabled ? 'Exibir no Cartão' : 'Ocultar no Cartão'}
+                      </span>
+                    </label>
+                  </div>
+
+                  {(!hideBusinessHours && businessHoursEnabled) && (
+                    <div className="space-y-3 pt-1">
+                      {/* Botões Rápidos de Modelos Prontos */}
+                      <div>
+                        <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 block mb-1.5">
+                          💡 Sugestões rápidas para preencher com 1 clique:
+                        </span>
+                        <div className="flex flex-wrap gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setBusinessHours('Segunda a Sexta: 08:00 às 18:00');
+                              setBusinessHoursStatus('Horário Comercial');
+                            }}
+                            className="text-[11px] px-2.5 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-sky-400 rounded-lg text-slate-700 dark:text-slate-300 font-medium transition-colors cursor-pointer"
+                          >
+                            📅 Seg a Sex: 08h às 18h
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setBusinessHours('Segunda a Sexta: 08:00 às 18:00\nSábado: 08:00 às 12:00\nDomingo: Fechado');
+                              setBusinessHoursStatus('Atendimento Estendido');
+                            }}
+                            className="text-[11px] px-2.5 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-sky-400 rounded-lg text-slate-700 dark:text-slate-300 font-medium transition-colors cursor-pointer"
+                          >
+                            📅 Seg a Sex + Sábado
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setBusinessHours('Segunda a Sábado: 09:00 às 19:00\nDomingos e Feriados: Fechado');
+                              setBusinessHoursStatus('Comércio / Loja');
+                            }}
+                            className="text-[11px] px-2.5 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-sky-400 rounded-lg text-slate-700 dark:text-slate-300 font-medium transition-colors cursor-pointer"
+                          >
+                            🛍️ Comércio (09h às 19h)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setBusinessHours('Atendimento exclusivamente mediante agendamento prévio.');
+                              setBusinessHoursStatus('Com Hora Marcada');
+                            }}
+                            className="text-[11px] px-2.5 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-sky-400 rounded-lg text-slate-700 dark:text-slate-300 font-medium transition-colors cursor-pointer"
+                          >
+                            🗓️ Somente com Agendamento
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setBusinessHours('Plantão de Atendimento 24 Horas todos os dias.');
+                              setBusinessHoursStatus('Plantão 24h');
+                            }}
+                            className="text-[11px] px-2.5 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-sky-400 rounded-lg text-slate-700 dark:text-slate-300 font-medium transition-colors cursor-pointer"
+                          >
+                            🚨 Plantão 24h
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Textarea de Horários */}
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                          Descrição dos Dias e Horários
+                        </label>
+                        <textarea
+                          rows={3}
+                          placeholder="Ex: Segunda a Sexta: 08:00 às 18:00&#10;Sábado: 08:00 às 12:00"
+                          value={businessHours}
+                          onChange={(e) => setBusinessHours(e.target.value)}
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all text-slate-800 dark:text-slate-100 placeholder:text-slate-400"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
 
@@ -997,6 +1127,48 @@ export function ClientOnboardingFormPage() {
                     placeholder="Ex: https://suaempresa.com.br"
                     value={websiteUrl}
                     onChange={(e) => setWebsiteUrl(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all text-slate-800 dark:text-slate-100"
+                  />
+                </div>
+              </div>
+
+              {/* Avaliação no Google */}
+              <div className="sm:col-span-2 p-3.5 rounded-2xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-800/50">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-bold text-amber-900 dark:text-amber-200 flex items-center gap-1.5">
+                    <Star size={15} className="text-amber-500 fill-amber-500" />
+                    <span>Link de Avaliação no Google (Google Meu Negócio)</span>
+                  </label>
+                  <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300">
+                    ⭐ Mais Clientes
+                  </span>
+                </div>
+                <div className="relative">
+                  <Star size={16} className="absolute left-3.5 top-3.5 text-amber-500" />
+                  <input
+                    type="text"
+                    placeholder="Ex: https://g.page/r/XXXXX/review ou link de pedir avaliações do Google"
+                    value={googleReviewUrl}
+                    onChange={(e) => setGoogleReviewUrl(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-amber-300/70 dark:border-amber-700/80 bg-white dark:bg-slate-900 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all text-slate-800 dark:text-slate-100"
+                  />
+                </div>
+                <p className="text-[11px] text-amber-800/80 dark:text-amber-300/80 mt-1.5">
+                  Adiciona o botão de <strong>"Avalie no Google ⭐"</strong> diretamente no seu cartão digital para captar depoimentos 5 estrelas.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Link do Google Maps (Opcional)
+                </label>
+                <div className="relative">
+                  <MapPin size={16} className="absolute left-3.5 top-3.5 text-rose-500" />
+                  <input
+                    type="text"
+                    placeholder="Ex: https://maps.app.goo.gl/..."
+                    value={googleMapsUrl}
+                    onChange={(e) => setGoogleMapsUrl(e.target.value)}
                     className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all text-slate-800 dark:text-slate-100"
                   />
                 </div>

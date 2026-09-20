@@ -424,13 +424,17 @@ export function mapDbToDigitalCard(row: any): DigitalCard {
       let clean = raw;
       if (clean.includes('###review=')) clean = clean.split('###review=')[0];
       if (clean.includes('###pix=')) clean = clean.split('###pix=')[0];
+      if (clean.includes('###hours=')) clean = clean.split('###hours=')[0];
       return clean.trim();
     })(),
     googleReviewUrl: (() => {
       const raw = row.google_maps_url || '';
       if (raw.includes('###review=')) {
         const afterReview = raw.split('###review=')[1] || '';
-        return (afterReview.includes('###pix=') ? afterReview.split('###pix=')[0] : afterReview).trim();
+        let result = afterReview;
+        if (result.includes('###pix=')) result = result.split('###pix=')[0];
+        if (result.includes('###hours=')) result = result.split('###hours=')[0];
+        return result.trim();
       }
       return (row as any).google_review_url || '';
     })(),
@@ -439,7 +443,8 @@ export function mapDbToDigitalCard(row: any): DigitalCard {
       if (raw.includes('###pix=')) {
         try {
           const encoded = raw.split('###pix=')[1] || '';
-          const parsed = JSON.parse(decodeURIComponent(encoded));
+          const cleanEncoded = encoded.split('###hours=')[0];
+          const parsed = JSON.parse(decodeURIComponent(cleanEncoded));
           if (parsed && parsed.key) return parsed.key;
         } catch (_) {}
       }
@@ -450,7 +455,8 @@ export function mapDbToDigitalCard(row: any): DigitalCard {
       if (raw.includes('###pix=')) {
         try {
           const encoded = raw.split('###pix=')[1] || '';
-          const parsed = JSON.parse(decodeURIComponent(encoded));
+          const cleanEncoded = encoded.split('###hours=')[0];
+          const parsed = JSON.parse(decodeURIComponent(cleanEncoded));
           if (parsed && parsed.type) return parsed.type;
         } catch (_) {}
       }
@@ -461,7 +467,8 @@ export function mapDbToDigitalCard(row: any): DigitalCard {
       if (raw.includes('###pix=')) {
         try {
           const encoded = raw.split('###pix=')[1] || '';
-          const parsed = JSON.parse(decodeURIComponent(encoded));
+          const cleanEncoded = encoded.split('###hours=')[0];
+          const parsed = JSON.parse(decodeURIComponent(cleanEncoded));
           if (parsed && parsed.beneficiary) return parsed.beneficiary;
         } catch (_) {}
       }
@@ -472,12 +479,47 @@ export function mapDbToDigitalCard(row: any): DigitalCard {
       if (raw.includes('###pix=')) {
         try {
           const encoded = raw.split('###pix=')[1] || '';
-          const parsed = JSON.parse(decodeURIComponent(encoded));
+          const cleanEncoded = encoded.split('###hours=')[0];
+          const parsed = JSON.parse(decodeURIComponent(cleanEncoded));
           if (parsed && parsed.city) return parsed.city;
         } catch (_) {}
       }
       return row.pix_city || row.city || 'Brasil';
     })(),
+    businessHours: (() => {
+      const raw = row.google_maps_url || '';
+      if (raw.includes('###hours=')) {
+        try {
+          const encoded = raw.split('###hours=')[1] || '';
+          const parsed = JSON.parse(decodeURIComponent(encoded));
+          if (parsed && parsed.hours) return parsed.hours;
+        } catch (_) {}
+      }
+      return (row as any).business_hours || '';
+    })(),
+    businessHoursEnabled: (() => {
+      const raw = row.google_maps_url || '';
+      if (raw.includes('###hours=')) {
+        try {
+          const encoded = raw.split('###hours=')[1] || '';
+          const parsed = JSON.parse(decodeURIComponent(encoded));
+          if (parsed && typeof parsed.enabled === 'boolean') return parsed.enabled;
+        } catch (_) {}
+      }
+      return (row as any).business_hours_enabled !== false;
+    })(),
+    hideBusinessHours: (() => {
+      const raw = row.google_maps_url || '';
+      if (raw.includes('###hours=')) {
+        try {
+          const encoded = raw.split('###hours=')[1] || '';
+          const parsed = JSON.parse(decodeURIComponent(encoded));
+          if (parsed && typeof parsed.hidden === 'boolean') return parsed.hidden;
+        } catch (_) {}
+      }
+      return Boolean((row as any).hide_business_hours);
+    })(),
+    businessHoursStatus: (row as any).business_hours_status || '',
     summary: row.summary || '',
     instagramUrl: row.instagram_url || '',
     linkedinUrl: row.linkedin_url || '',
@@ -613,7 +655,15 @@ export function mapDigitalCardToDb(card: Partial<DigitalCard>, userId: string): 
             city: card.pixCity?.trim() || '',
           }))}`
         : '';
-      return `${mapsBase}${reviewPart}${pixPart}`;
+      const hoursPart = card.businessHours?.trim()
+        ? `###hours=${encodeURIComponent(JSON.stringify({
+            hours: card.businessHours.trim(),
+            enabled: card.businessHoursEnabled !== false,
+            hidden: Boolean(card.hideBusinessHours),
+            status: card.businessHoursStatus || '',
+          }))}`
+        : '';
+      return `${mapsBase}${reviewPart}${pixPart}${hoursPart}`;
     })(),
     summary: card.summary || '',
     instagram_url: card.instagramUrl || '',

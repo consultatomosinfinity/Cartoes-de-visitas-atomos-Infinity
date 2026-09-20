@@ -29,9 +29,11 @@ import {
   FolderSync,
   Calendar,
   DollarSign,
-  BellRing
+  BellRing,
+  Star,
 } from 'lucide-react';
 import { DigitalCard } from '../types.ts';
+import { PRESET_THEMES, VISUAL_PRESETS } from '../../shared/digital-card-appearance.ts';
 import { DigitalCardQrCode } from '../components/DigitalCardQrCode.tsx';
 import { DigitalCardLivePreview } from '../components/DigitalCardLivePreview.tsx';
 import { CardBillingAlertsManager } from '../components/CardBillingAlertsManager.tsx';
@@ -81,6 +83,7 @@ export const DeliveryModule: React.FC = () => {
   const [clientWhatsApp, setClientWhatsApp] = useState('');
   const [clientEmail, setClientEmail] = useState('');
   const [clientWebsite, setClientWebsite] = useState('');
+  const [clientGoogleReviewUrl, setClientGoogleReviewUrl] = useState('');
   const [clientAddress, setClientAddress] = useState('');
   const [clientCity, setClientCity] = useState('');
   const [clientSummary, setClientSummary] = useState('');
@@ -396,16 +399,17 @@ export const DeliveryModule: React.FC = () => {
         whatsappPhone: clientWhatsApp || clientPhone,
         email: clientEmail,
         websiteUrl: clientWebsite,
+        googleReviewUrl: clientGoogleReviewUrl,
         address: clientAddress,
         city: clientCity,
         summary: clientSummary,
         imageUrl: clientPhotoUrl,
         companyLogoUrl: clientLogoUrl,
         appearanceTheme: clientTheme,
-        backgroundColor: clientTheme === 'escuro' ? '#0F172A' : '#12375B',
-        buttonColor: '#1A7FBE',
-        bodyColor: clientTheme === 'escuro' ? '#1E293B' : '#EAF1F7',
-        contentColor: clientTheme === 'escuro' ? '#0F172A' : '#FFFFFF',
+        backgroundColor: PRESET_THEMES[clientTheme]?.backgroundColor || '#12375B',
+        buttonColor: PRESET_THEMES[clientTheme]?.buttonColor || '#1A7FBE',
+        bodyColor: PRESET_THEMES[clientTheme]?.bodyColor || '#EAF1F7',
+        contentColor: PRESET_THEMES[clientTheme]?.contentColor || '#FFFFFF',
         contentOpacity: 100,
         status: 'ativo',
         inquiryEnabled: true,
@@ -1169,6 +1173,20 @@ export const DeliveryModule: React.FC = () => {
                         className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-slate-100 text-xs focus:ring-2 focus:ring-sky-500 focus:outline-none"
                       />
                     </div>
+
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-bold text-amber-300 mb-1 flex items-center gap-1.5">
+                        <Star size={13} className="text-amber-400 fill-amber-400" />
+                        <span>Link de Avaliação no Google (Google Meu Negócio)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={clientGoogleReviewUrl}
+                        onChange={(e) => setClientGoogleReviewUrl(e.target.value)}
+                        placeholder="Ex: https://g.page/r/XXXXX/review ou link de pedir avaliações"
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-amber-500/50 text-slate-100 text-xs focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                      />
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1233,10 +1251,11 @@ export const DeliveryModule: React.FC = () => {
                         onChange={(e) => setClientTheme(e.target.value)}
                         className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-slate-100 text-xs focus:ring-2 focus:ring-sky-500 focus:outline-none"
                       >
-                        <option value="padrao">Azul Institucional Clássico</option>
-                        <option value="escuro">Dark Luxury (Preto Nobre / Dourado)</option>
-                        <option value="claro">Branco Neve / Clean Minimalista</option>
-                        <option value="esmeralda">Verde Esmeralda Elegante</option>
+                        {VISUAL_PRESETS.map((preset) => (
+                          <option key={preset.id} value={preset.id}>
+                            {preset.name} ({preset.tag})
+                          </option>
+                        ))}
                       </select>
                     </div>
                   </div>

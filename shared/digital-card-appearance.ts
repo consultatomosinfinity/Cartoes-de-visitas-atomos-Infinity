@@ -5,12 +5,248 @@ export interface CardThemeColors {
   contentColor: string;
 }
 
+export interface CardVisualPreset {
+  id: string;
+  name: string;
+  tag: string;
+  desc: string;
+  bg: string;
+  accent: string;
+  colors: CardThemeColors;
+  category?: 'palette' | 'effect';
+}
+
+export const VISUAL_PRESETS: CardVisualPreset[] = [
+  {
+    id: 'azul_corporativo',
+    name: 'Azul Corporativo',
+    tag: 'Executivo & Confiável',
+    desc: 'Ideal para advogados, diretores, empresas e consultorias.',
+    bg: '#12375B',
+    accent: '#1A7FBE',
+    category: 'palette',
+    colors: {
+      backgroundColor: '#12375B',
+      buttonColor: '#1A7FBE',
+      bodyColor: '#EAF1F7',
+      contentColor: '#FFFFFF',
+    },
+  },
+  {
+    id: 'ouro_luxo',
+    name: 'Ouro & Preto Luxo',
+    tag: 'VIP & Sofisticado',
+    desc: 'Perfeito para clínicas premium, corretores de luxo e marcas exclusivas.',
+    bg: '#18181B',
+    accent: '#D97706',
+    category: 'palette',
+    colors: {
+      backgroundColor: '#18181B',
+      buttonColor: '#D97706',
+      bodyColor: '#09090B',
+      contentColor: '#18181B',
+    },
+  },
+  {
+    id: 'esmeralda',
+    name: 'Verde Esmeralda',
+    tag: 'Saúde & Natureza',
+    desc: 'Excelente para nutricionistas, médicos, estética, finanças e sustentabilidade.',
+    bg: '#064E3B',
+    accent: '#059669',
+    category: 'palette',
+    colors: {
+      backgroundColor: '#064E3B',
+      buttonColor: '#059669',
+      bodyColor: '#ECFDF5',
+      contentColor: '#FFFFFF',
+    },
+  },
+  {
+    id: 'roxo_criativo',
+    name: 'Roxo Criativo',
+    tag: 'Tech & Inovador',
+    desc: 'Para designers, programadores, marketing digital e agências.',
+    bg: '#4C1D95',
+    accent: '#7C3AED',
+    category: 'palette',
+    colors: {
+      backgroundColor: '#4C1D95',
+      buttonColor: '#7C3AED',
+      bodyColor: '#F5F3FF',
+      contentColor: '#FFFFFF',
+    },
+  },
+  {
+    id: 'vermelho_elegante',
+    name: 'Vermelho & Vinho',
+    tag: 'Elegância & Energia',
+    desc: 'Ideal para gastronomia, direito, eventos e moda.',
+    bg: '#881337',
+    accent: '#BE123C',
+    category: 'palette',
+    colors: {
+      backgroundColor: '#881337',
+      buttonColor: '#BE123C',
+      bodyColor: '#FFF1F2',
+      contentColor: '#FFFFFF',
+    },
+  },
+  {
+    id: 'rosa_moderno',
+    name: 'Rosa & Beleza',
+    tag: 'Estética & Feminino',
+    desc: 'Indicado para salões, biomédicas, micropigmentação e semijoias.',
+    bg: '#831843',
+    accent: '#DB2777',
+    category: 'palette',
+    colors: {
+      backgroundColor: '#831843',
+      buttonColor: '#DB2777',
+      bodyColor: '#FDF2F8',
+      contentColor: '#FFFFFF',
+    },
+  },
+  {
+    id: 'preto_minimalista',
+    name: 'Preto & Grafite Clean',
+    tag: 'Minimalista & Moderno',
+    desc: 'Estilo dark mode universal para qualquer área profissional.',
+    bg: '#0F172A',
+    accent: '#38BDF8',
+    category: 'palette',
+    colors: {
+      backgroundColor: '#0F172A',
+      buttonColor: '#38BDF8',
+      bodyColor: '#020617',
+      contentColor: '#1E293B',
+    },
+  },
+];
+
+export const EFFECT_PRESETS: CardVisualPreset[] = [
+  {
+    id: 'neumorphism_light',
+    name: 'Neumorfismo Claro',
+    tag: 'Soft UI 3D',
+    desc: 'Efeito tátil moderno com relevos e sombras suaves em relevo.',
+    bg: '#E0E5EC',
+    accent: '#94A3B8',
+    category: 'effect',
+    colors: {
+      backgroundColor: '#E0E5EC',
+      buttonColor: '#E0E5EC',
+      bodyColor: '#E0E5EC',
+      contentColor: '#E0E5EC',
+    },
+  },
+  {
+    id: 'neumorphism_dark',
+    name: 'Neumorfismo Escuro',
+    tag: 'Dark High-Tech',
+    desc: 'Relevos profundos em grafite escuro com botões em baixo/alto relevo.',
+    bg: '#181B22',
+    accent: '#334155',
+    category: 'effect',
+    colors: {
+      backgroundColor: '#181B22',
+      buttonColor: '#181B22',
+      bodyColor: '#181B22',
+      contentColor: '#181B22',
+    },
+  },
+  {
+    id: 'glass_light',
+    name: 'Glassmorphism Claro',
+    tag: 'Vidro Translúcido',
+    desc: 'Desfoque de fundo e efeito translúcido moderno com bordas de luz.',
+    bg: 'rgba(255, 255, 255, 0.7)',
+    accent: '#2563EB',
+    category: 'effect',
+    colors: {
+      backgroundColor: 'rgba(255, 255, 255, 0.45)',
+      buttonColor: '#2563EB',
+      bodyColor: '#0F172A',
+      contentColor: 'rgba(255, 255, 255, 0.55)',
+    },
+  },
+  {
+    id: 'glass_dark',
+    name: 'Glassmorphism Escuro',
+    tag: 'Vidro Noturno',
+    desc: 'Visual ultra-moderno escuro com transparência e destaque roxo.',
+    bg: 'rgba(15, 23, 42, 0.8)',
+    accent: '#7C3AED',
+    category: 'effect',
+    colors: {
+      backgroundColor: 'rgba(15, 23, 42, 0.6)',
+      buttonColor: '#7C3AED',
+      bodyColor: '#090D16',
+      contentColor: 'rgba(30, 41, 59, 0.65)',
+    },
+  },
+];
+
 export const PRESET_THEMES: Record<string, CardThemeColors> = {
   padrao: {
     backgroundColor: '#12375B',
     buttonColor: '#1A7FBE',
     bodyColor: '#EAF1F7',
     contentColor: '#FFFFFF',
+  },
+  azul_corporativo: {
+    backgroundColor: '#12375B',
+    buttonColor: '#1A7FBE',
+    bodyColor: '#EAF1F7',
+    contentColor: '#FFFFFF',
+  },
+  ouro_luxo: {
+    backgroundColor: '#18181B',
+    buttonColor: '#D97706',
+    bodyColor: '#09090B',
+    contentColor: '#18181B',
+  },
+  esmeralda: {
+    backgroundColor: '#064E3B',
+    buttonColor: '#059669',
+    bodyColor: '#ECFDF5',
+    contentColor: '#FFFFFF',
+  },
+  verde: {
+    backgroundColor: '#1B5E20',
+    buttonColor: '#4CAF50',
+    bodyColor: '#E8F5E9',
+    contentColor: '#FFFFFF',
+  },
+  roxo_criativo: {
+    backgroundColor: '#4C1D95',
+    buttonColor: '#7C3AED',
+    bodyColor: '#F5F3FF',
+    contentColor: '#FFFFFF',
+  },
+  roxo: {
+    backgroundColor: '#4A148C',
+    buttonColor: '#AB47BC',
+    bodyColor: '#F3E5F5',
+    contentColor: '#FFFFFF',
+  },
+  vermelho_elegante: {
+    backgroundColor: '#881337',
+    buttonColor: '#BE123C',
+    bodyColor: '#FFF1F2',
+    contentColor: '#FFFFFF',
+  },
+  rosa_moderno: {
+    backgroundColor: '#831843',
+    buttonColor: '#DB2777',
+    bodyColor: '#FDF2F8',
+    contentColor: '#FFFFFF',
+  },
+  preto_minimalista: {
+    backgroundColor: '#0F172A',
+    buttonColor: '#38BDF8',
+    bodyColor: '#020617',
+    contentColor: '#1E293B',
   },
   escuro: {
     backgroundColor: '#1A1A2E',
@@ -41,18 +277,6 @@ export const PRESET_THEMES: Record<string, CardThemeColors> = {
     buttonColor: '#7C3AED',
     bodyColor: '#090D16',
     contentColor: 'rgba(30, 41, 59, 0.65)',
-  },
-  verde: {
-    backgroundColor: '#1B5E20',
-    buttonColor: '#4CAF50',
-    bodyColor: '#E8F5E9',
-    contentColor: '#FFFFFF',
-  },
-  roxo: {
-    backgroundColor: '#4A148C',
-    buttonColor: '#AB47BC',
-    bodyColor: '#F3E5F5',
-    contentColor: '#FFFFFF',
   },
   personalizado: {
     backgroundColor: '#12375B',

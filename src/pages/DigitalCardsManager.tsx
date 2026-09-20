@@ -56,9 +56,10 @@ import {
   DollarSign,
   BellRing,
   FileText,
+  Clock,
 } from 'lucide-react';
 import { DigitalCard, CardMetrics, DigitalCardInquiry } from '../types.ts';
-import { PRESET_THEMES } from '../../shared/digital-card-appearance.ts';
+import { PRESET_THEMES, VISUAL_PRESETS, EFFECT_PRESETS } from '../../shared/digital-card-appearance.ts';
 import { getAiAgentButtonGlowClass, getAiAgentButtonPaddingY, AiAgentGlowIntensity, AiAgentButtonSize } from '../../shared/digital-card-ai-agent.ts';
 import { DigitalCardLivePreview } from '../components/DigitalCardLivePreview.tsx';
 import { CardBillingAlertsManager } from '../components/CardBillingAlertsManager.tsx';
@@ -303,6 +304,10 @@ export const DigitalCardsManager: React.FC = () => {
       country: 'Brasil',
       googleMapsUrl: '',
       googleReviewUrl: '',
+      businessHours: '',
+      businessHoursEnabled: true,
+      hideBusinessHours: false,
+      businessHoursStatus: 'Horário Comercial',
       summary: '',
       aiAgentUrl: '',
       aiAgentButtonText: 'Atendente Virtual',
@@ -2841,6 +2846,131 @@ export const DigitalCardsManager: React.FC = () => {
                             )}
                           </div>
                         </div>
+
+                        {/* NOVO RECURSO: DIAS E HORÁRIOS DE ATENDIMENTO / FUNCIONAMENTO */}
+                        <div className="p-3.5 rounded-xl border border-sky-300 dark:border-sky-800/80 bg-sky-50/70 dark:bg-sky-950/30 space-y-3">
+                          <div className="flex items-center justify-between flex-wrap gap-2">
+                            <label className="flex items-center gap-1.5 text-xs font-bold text-sky-900 dark:text-sky-300">
+                              <Clock size={15} className="text-sky-600 dark:text-sky-400" />
+                              <span>Dias & Horários de Funcionamento (Atendimento)</span>
+                            </label>
+                            {/* Checkbox para ocultar/exibir */}
+                            <label className="flex items-center gap-1.5 cursor-pointer text-[11px] font-bold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 shadow-2xs">
+                              <input
+                                type="checkbox"
+                                checked={!editingCard.hideBusinessHours && editingCard.businessHoursEnabled !== false}
+                                onChange={(e) => {
+                                  const isChecked = e.target.checked;
+                                  setEditingCard({
+                                    ...editingCard,
+                                    hideBusinessHours: !isChecked,
+                                    businessHoursEnabled: isChecked,
+                                  });
+                                }}
+                                className="w-3.5 h-3.5 text-sky-600 rounded border-slate-300 focus:ring-sky-500"
+                              />
+                              <span>{!editingCard.hideBusinessHours && editingCard.businessHoursEnabled !== false ? 'Exibir no Cartão' : 'Ocultar no Cartão'}</span>
+                            </label>
+                          </div>
+
+                          {(!editingCard.hideBusinessHours && editingCard.businessHoursEnabled !== false) && (
+                            <div className="space-y-2.5 pt-1">
+                              {/* Sugestões Prontas */}
+                              <div>
+                                <span className="text-[10.5px] font-semibold text-slate-500 dark:text-slate-400 block mb-1">
+                                  💡 Modelos prontos para preenchimento rápido:
+                                </span>
+                                <div className="flex flex-wrap gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingCard({
+                                      ...editingCard,
+                                      businessHours: 'Segunda a Sexta: 08:00 às 18:00',
+                                      businessHoursStatus: 'Horário Comercial',
+                                    })}
+                                    className="text-[10px] px-2 py-0.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-sky-400 rounded-md text-slate-700 dark:text-slate-300 font-medium transition-colors cursor-pointer"
+                                  >
+                                    📅 Seg a Sex: 08h às 18h
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingCard({
+                                      ...editingCard,
+                                      businessHours: 'Segunda a Sexta: 08:00 às 18:00\nSábado: 08:00 às 12:00\nDomingo: Fechado',
+                                      businessHoursStatus: 'Atendimento Estendido',
+                                    })}
+                                    className="text-[10px] px-2 py-0.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-sky-400 rounded-md text-slate-700 dark:text-slate-300 font-medium transition-colors cursor-pointer"
+                                  >
+                                    📅 Seg a Sex + Sábado
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingCard({
+                                      ...editingCard,
+                                      businessHours: 'Segunda a Sábado: 09:00 às 19:00\nDomingos e Feriados: Fechado',
+                                      businessHoursStatus: 'Comércio / Loja',
+                                    })}
+                                    className="text-[10px] px-2 py-0.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-sky-400 rounded-md text-slate-700 dark:text-slate-300 font-medium transition-colors cursor-pointer"
+                                  >
+                                    🛍️ Comércio (09h às 19h)
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingCard({
+                                      ...editingCard,
+                                      businessHours: 'Atendimento exclusivamente mediante agendamento prévio.',
+                                      businessHoursStatus: 'Com Hora Marcada',
+                                    })}
+                                    className="text-[10px] px-2 py-0.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-sky-400 rounded-md text-slate-700 dark:text-slate-300 font-medium transition-colors cursor-pointer"
+                                  >
+                                    🗓️ Com Agendamento
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingCard({
+                                      ...editingCard,
+                                      businessHours: 'Plantão de Atendimento 24 Horas todos os dias.',
+                                      businessHoursStatus: 'Plantão 24h',
+                                    })}
+                                    className="text-[10px] px-2 py-0.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-sky-400 rounded-md text-slate-700 dark:text-slate-300 font-medium transition-colors cursor-pointer"
+                                  >
+                                    🚨 Plantão 24h
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                <div className="sm:col-span-2">
+                                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                                    Texto dos Horários
+                                  </label>
+                                  <textarea
+                                    rows={3}
+                                    value={editingCard.businessHours || ''}
+                                    onChange={(e) => setEditingCard({ ...editingCard, businessHours: e.target.value })}
+                                    placeholder="Ex: Segunda a Sexta: 08:00 às 18:00&#10;Sábado: 08:00 às 12:00"
+                                    className="w-full px-3 py-2 text-xs rounded-xl border border-sky-300 dark:border-sky-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500 font-medium"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                                    Etiqueta de Destaque
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={editingCard.businessHoursStatus || 'Horário Comercial'}
+                                    onChange={(e) => setEditingCard({ ...editingCard, businessHoursStatus: e.target.value })}
+                                    placeholder="Ex: Horário Comercial"
+                                    className="w-full px-3 py-2 text-xs rounded-xl border border-sky-300 dark:border-sky-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500 font-medium"
+                                  />
+                                  <span className="text-[10px] text-slate-400 block mt-1">
+                                    Aparece no topo do bloco de horários
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -2860,44 +2990,140 @@ export const DigitalCardsManager: React.FC = () => {
                     </button>
 
                     {activeAccordion === 5 && (
-                      <div className="p-4 space-y-5 bg-white dark:bg-slate-900/40">
-                        {/* 1. Temas pré-definidos */}
-                        <div>
-                          <label className="block text-[11px] font-bold text-slate-700 mb-2">
-                            Temas Pré-definidos
-                          </label>
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                            {Object.keys(PRESET_THEMES).map((themeKey) => {
-                              const t = PRESET_THEMES[themeKey];
-                              const isCur = editingCard.appearanceTheme === themeKey;
+                      <div className="p-4 sm:p-5 space-y-6 bg-white dark:bg-slate-900/40">
+                        {/* 1. Preferência Visual & Estilo do Cartão */}
+                        <div className="space-y-4">
+                          <div className="flex items-center gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+                            <div className="w-9 h-9 rounded-2xl bg-amber-100 dark:bg-amber-950/70 text-amber-700 dark:text-amber-300 flex items-center justify-center font-black shrink-0">
+                              <Palette size={18} />
+                            </div>
+                            <div>
+                              <h4 className="text-sm font-black text-slate-900 dark:text-white tracking-tight">
+                                Preferência Visual & Estilo do Cartão
+                              </h4>
+                              <p className="text-xs text-slate-500 dark:text-slate-400">
+                                Escolha o estilo de cores que mais combina com seu perfil
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                            {VISUAL_PRESETS.map((theme) => {
+                              const isSelected =
+                                editingCard.appearanceTheme === theme.id ||
+                                (theme.id === 'azul_corporativo' && (!editingCard.appearanceTheme || editingCard.appearanceTheme === 'padrao'));
+
                               return (
                                 <button
-                                  key={themeKey}
+                                  key={theme.id}
                                   type="button"
-                                  onClick={() => handleThemeSelect(themeKey)}
-                                  className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
-                                    isCur ? 'border-sky-600 ring-2 ring-sky-600/20 bg-sky-50/40' : 'border-slate-200 hover:border-slate-300 bg-white'
+                                  onClick={() => handleThemeSelect(theme.id)}
+                                  className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between ${
+                                    isSelected
+                                      ? 'border-sky-500 ring-2 ring-sky-500/20 bg-sky-50/50 dark:bg-sky-950/30'
+                                      : 'border-slate-200 dark:border-slate-700/80 hover:border-slate-300 dark:hover:border-slate-600 bg-slate-50/40 dark:bg-slate-800/30'
                                   }`}
                                 >
-                                  <div className="flex items-center gap-1.5 mb-1.5">
-                                    <div className="w-3.5 h-3.5 rounded-full shadow-xs" style={{ backgroundColor: t.backgroundColor }} />
-                                    <div className="w-3.5 h-3.5 rounded-full shadow-xs" style={{ backgroundColor: t.buttonColor }} />
-                                    <div className="w-3.5 h-3.5 rounded-full shadow-xs" style={{ backgroundColor: t.bodyColor }} />
+                                  <div>
+                                    <div className="flex items-center justify-between mb-2.5">
+                                      <div className="flex items-center gap-1.5">
+                                        <span
+                                          className="w-4 h-4 rounded-full border border-white dark:border-slate-800 shadow-xs inline-block"
+                                          style={{ backgroundColor: theme.bg }}
+                                        />
+                                        <span
+                                          className="w-4 h-4 rounded-full border border-white dark:border-slate-800 shadow-xs inline-block -ml-2"
+                                          style={{ backgroundColor: theme.accent }}
+                                        />
+                                      </div>
+                                      {isSelected && (
+                                        <span className="w-5 h-5 rounded-full bg-sky-500 text-white flex items-center justify-center text-[11px] font-bold shadow-xs">
+                                          ✓
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    <div className="font-bold text-xs text-slate-900 dark:text-white">{theme.name}</div>
+                                    <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 block mt-0.5">
+                                      {theme.tag}
+                                    </span>
                                   </div>
-                                  <div className="text-[11px] font-bold capitalize text-slate-700">
-                                    {themeKey}
-                                  </div>
+                                  <p className="text-[10.5px] text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
+                                    {theme.desc}
+                                  </p>
                                 </button>
                               );
                             })}
                           </div>
                         </div>
 
-                        {/* 2. Cores das Camadas */}
-                        <div className="pt-2 border-t border-slate-100">
-                          <label className="block text-[11px] font-bold text-slate-700 mb-2">
-                            Cores das Camadas
+                        {/* 2. Efeitos Visuais Especiais (Neumorfismo 3D & Glass) */}
+                        <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+                          <div className="flex items-center justify-between mb-2.5">
+                            <div>
+                              <label className="block text-xs font-bold text-slate-700 dark:text-slate-200">
+                                Efeitos Visuais Especiais (Neumorfismo 3D & Glass)
+                              </label>
+                              <p className="text-[10.5px] text-slate-500 dark:text-slate-400">
+                                Acabamentos com profundidade tátil e transparências translúcidas
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                            {EFFECT_PRESETS.map((effect) => {
+                              const isSelected = editingCard.appearanceTheme === effect.id;
+                              return (
+                                <button
+                                  key={effect.id}
+                                  type="button"
+                                  onClick={() => handleThemeSelect(effect.id)}
+                                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer relative flex flex-col justify-between ${
+                                    isSelected
+                                      ? 'border-sky-500 ring-2 ring-sky-500/20 bg-sky-50/50 dark:bg-sky-950/30'
+                                      : 'border-slate-200 dark:border-slate-700/80 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-800/40'
+                                  }`}
+                                >
+                                  <div>
+                                    <div className="flex items-center justify-between mb-2">
+                                      <div className="flex items-center gap-1">
+                                        <span
+                                          className="w-3.5 h-3.5 rounded-full border border-slate-300 dark:border-slate-600 shadow-xs"
+                                          style={{ backgroundColor: effect.colors.backgroundColor }}
+                                        />
+                                        <span
+                                          className="w-3.5 h-3.5 rounded-full border border-slate-300 dark:border-slate-600 shadow-xs -ml-1.5"
+                                          style={{ backgroundColor: effect.colors.buttonColor }}
+                                        />
+                                      </div>
+                                      {isSelected && (
+                                        <span className="w-4 h-4 rounded-full bg-sky-500 text-white flex items-center justify-center text-[10px] font-bold">
+                                          ✓
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="text-[11px] font-bold text-slate-900 dark:text-white">{effect.name}</div>
+                                    <span className="text-[9.5px] font-semibold text-sky-600 dark:text-sky-400 block mt-0.5">
+                                      {effect.tag}
+                                    </span>
+                                  </div>
+                                  <p className="text-[9.5px] text-slate-400 dark:text-slate-400 mt-1.5 line-clamp-2 leading-tight">
+                                    {effect.desc}
+                                  </p>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* 3. Cores das Camadas Personalizadas */}
+                        <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+                          <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1">
+                            Ajuste Fino: Cores das Camadas
                           </label>
+                          <p className="text-[10.5px] text-slate-500 dark:text-slate-400 mb-3">
+                            Você pode personalizar individualmente cada camada do cartão após escolher um estilo base acima
+                          </p>
                           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                             {/* Fundo Header */}
                             <div className="p-2.5 rounded-xl border border-slate-200 bg-slate-50/60">

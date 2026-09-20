@@ -208,6 +208,12 @@ export interface DigitalCard {
   inquiryShowMessage?: boolean;
   inquiryShowConsent?: boolean;
 
+  // Dias e Horários de Atendimento / Funcionamento
+  businessHours?: string;
+  businessHoursEnabled?: boolean;
+  hideBusinessHours?: boolean; // Checkbox para ocultar a área de dias e horários de funcionamento
+  businessHoursStatus?: string;
+
   // Status e controle
   status: DigitalCardStatus;
   createdById?: number;
@@ -331,6 +337,8 @@ export interface ClientOnboardingForm {
   facebookUrl?: string;
   youtubeUrl?: string;
   tiktokUrl?: string;
+  googleReviewUrl?: string; // Link de Avaliação no Google (Google Meu Negócio)
+  googleMapsUrl?: string;   // Link de Localização no Google Maps
   customLinkName?: string; // Ex: "Catálogo", "Agendamento", "Cardápio"
   customLinkUrl?: string;
 
@@ -342,6 +350,12 @@ export interface ClientOnboardingForm {
   // Preferências Visuais & Estilo
   preferredTheme?: string;
   notes?: string;
+
+  // Dias e Horários de Funcionamento (Opcional)
+  businessHours?: string;
+  businessHoursEnabled?: boolean;
+  hideBusinessHours?: boolean;
+  businessHoursStatus?: string;
 
   // Cartão gerado a partir do formulário
   generatedCardId?: number;

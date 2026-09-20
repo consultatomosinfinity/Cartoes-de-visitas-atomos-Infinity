@@ -2091,6 +2091,8 @@ app.post('/api/onboarding-forms', (req, res) => {
       contentBackgroundUrl: String(body.contentBackgroundUrl || '').trim(),
       instagramHandle: String(body.instagramHandle || '').trim(),
       websiteUrl: String(body.websiteUrl || '').trim(),
+      googleReviewUrl: String(body.googleReviewUrl || '').trim(),
+      googleMapsUrl: String(body.googleMapsUrl || '').trim(),
       linkedinUrl: String(body.linkedinUrl || '').trim(),
       facebookUrl: String(body.facebookUrl || '').trim(),
       youtubeUrl: String(body.youtubeUrl || '').trim(),
@@ -2368,7 +2370,15 @@ app.post('/api/onboarding-forms/:id/convert-to-card', (req, res) => {
       linkedinUrl: form.linkedinUrl || '',
       facebookUrl: form.facebookUrl || '',
       youtubeUrl: form.youtubeUrl || '',
+      googleReviewUrl: form.googleReviewUrl || '',
+      googleMapsUrl: form.googleMapsUrl || '',
       
+      // Dias e Horários de Atendimento (Funcionamento)
+      businessHours: form.businessHours || '',
+      businessHoursEnabled: form.businessHoursEnabled !== false,
+      hideBusinessHours: Boolean(form.hideBusinessHours),
+      businessHoursStatus: form.businessHoursStatus || 'Funcionamento',
+
       // Chave PIX e dados de pagamento configurados
       ctaLabel: form.customLinkName || 'Falar no WhatsApp',
       ctaUrl: form.customLinkUrl || (form.whatsappPhone ? `https://wa.me/55${form.whatsappPhone.replace(/\D/g, '')}` : ''),
