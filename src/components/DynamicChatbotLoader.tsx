@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation } from 'wouter';
 import { SystemSettings } from '../types.ts';
+import { getRemoteSystemSettings, DEFAULT_SYSTEM_SETTINGS } from '../lib/supabase.ts';
 
 const SCRIPT_ELEMENT_ID = 'atomos-dynamic-chatbot-script';
-const DEFAULT_JOTFORM_SCRIPT = 'https://cdn.jotfor.ms/agent/embedjs/01a0bfa1d8107000848905e7ba8cb2c582a4/embed.js';
+const DEFAULT_JOTFORM_SCRIPT = DEFAULT_SYSTEM_SETTINGS.chatbotScriptUrl || 'https://cdn.jotfor.ms/agent/embedjs/01a0c0ce84b870008af657718192cda49e69/embed.js';
 
 function extractScriptSrc(scriptUrl?: string, embedCode?: string): string | null {
   if (scriptUrl && scriptUrl.trim()) {
@@ -23,22 +24,20 @@ export function DynamicChatbotLoader() {
   const [settings, setSettings] = useState<SystemSettings | null>(() => {
     try {
       const cached = localStorage.getItem('atomos_system_settings');
-      return cached ? JSON.parse(cached) : null;
+      return cached ? JSON.parse(cached) : DEFAULT_SYSTEM_SETTINGS;
     } catch {
-      return null;
+      return DEFAULT_SYSTEM_SETTINGS;
     }
   });
 
   const loadSettings = async () => {
     try {
-      const res = await fetch('/api/system-settings');
-      if (res.ok) {
-        const data = await res.json();
-        setSettings(data);
-        localStorage.setItem('atomos_system_settings', JSON.stringify(data));
+      const remote = await getRemoteSystemSettings();
+      if (remote) {
+        setSettings(remote);
       }
     } catch {
-      // Ignora erro e usa localStorage/fallback
+      // Ignora erro e usa fallback
     }
   };
 

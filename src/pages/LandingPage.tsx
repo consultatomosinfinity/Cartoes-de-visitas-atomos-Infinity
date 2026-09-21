@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { safeApiCall } from '../lib/safeFetch';
+import { getRemoteSystemSettings } from '../lib/supabase.ts';
 import {
   Smartphone,
   Bot,
@@ -115,11 +115,9 @@ export const LandingPage: React.FC = () => {
 
   useEffect(() => {
     fetchLandingCard();
-    safeApiCall('/api/system-settings', undefined, null).then((settings) => {
-      const localSettings = localStorage.getItem('atomos_system_settings') ? JSON.parse(localStorage.getItem('atomos_system_settings')!) : null;
-      const finalSettings = settings || localSettings;
-      if (finalSettings && typeof finalSettings.degustacaoDays === 'number') {
-        setDegustacaoDays(finalSettings.degustacaoDays);
+    getRemoteSystemSettings().then((settings) => {
+      if (settings && typeof settings.degustacaoDays === 'number') {
+        setDegustacaoDays(settings.degustacaoDays);
       }
     }).catch(() => {});
 
@@ -129,11 +127,9 @@ export const LandingPage: React.FC = () => {
         const ch = new BroadcastChannel('digital_cards_sync');
         ch.onmessage = () => {
           fetchLandingCard();
-          safeApiCall('/api/system-settings', undefined, null).then((settings) => {
-            const localSettings = localStorage.getItem('atomos_system_settings') ? JSON.parse(localStorage.getItem('atomos_system_settings')!) : null;
-            const finalSettings = settings || localSettings;
-            if (finalSettings && typeof finalSettings.degustacaoDays === 'number') {
-              setDegustacaoDays(finalSettings.degustacaoDays);
+          getRemoteSystemSettings().then((settings) => {
+            if (settings && typeof settings.degustacaoDays === 'number') {
+              setDegustacaoDays(settings.degustacaoDays);
             }
           }).catch(() => {});
         };

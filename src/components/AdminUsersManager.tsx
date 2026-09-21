@@ -51,6 +51,9 @@ import {
   createNewUser,
   adminResetUserPassword,
   MASTER_EMAILS,
+  getRemoteSystemSettings,
+  saveRemoteSystemSettings,
+  DEFAULT_SYSTEM_SETTINGS,
 } from '../lib/supabase.ts';
 
 interface AdminUsersManagerProps {
@@ -74,17 +77,7 @@ export const AdminUsersManager: React.FC<AdminUsersManagerProps> = ({
   // Configurações Globais de Auto-Cadastro & Degustação
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [settingsLoading, setSettingsLoading] = useState(false);
-  const [systemSettings, setSystemSettings] = useState<SystemSettings>({
-    requireMasterApproval: false,
-    defaultRole: 'cliente',
-    defaultPlan: 'degustacao',
-    degustacaoDays: 30,
-    allowPublicRegistration: true,
-    masterWhatsApp: '+55 (15) 99625-9353',
-    customWelcomeMessage: '',
-    footerLinkClickable: true,
-    footerLinkUrl: 'https://consultatomosinfinity.com.br',
-  });
+  const [systemSettings, setSystemSettings] = useState<SystemSettings>(DEFAULT_SYSTEM_SETTINGS);
 
   // Modais
   const [showAddModal, setShowAddModal] = useState(false);
@@ -126,16 +119,15 @@ export const AdminUsersManager: React.FC<AdminUsersManagerProps> = ({
   const loadData = async () => {
     setLoading(true);
     try {
-      const [profilesData, cardsRes, settingsRes] = await Promise.all([
+      const [profilesData, cardsRes, remoteSettings] = await Promise.all([
         getAllProfiles(),
         fetch('/api/cards').then((r) => (r.ok ? r.json() : [])).catch(() => []),
-        safeApiCall('/api/system-settings', undefined, null),
+        getRemoteSystemSettings(),
       ]);
       setUsers(profilesData);
       setCards(cardsRes);
-      const localSettings = localStorage.getItem('atomos_system_settings') ? JSON.parse(localStorage.getItem('atomos_system_settings')!) : null;
-      if (settingsRes || localSettings) {
-        setSystemSettings({ ...(localSettings || {}), ...(settingsRes || {}) });
+      if (remoteSettings) {
+        setSystemSettings(remoteSettings);
       }
     } catch (err: any) {
       setFeedback({ type: 'error', message: err.message || 'Erro ao carregar usuários' });
@@ -314,23 +306,9 @@ export const AdminUsersManager: React.FC<AdminUsersManagerProps> = ({
     e.preventDefault();
     setSettingsLoading(true);
     try {
-      try {
-        localStorage.setItem('atomos_system_settings', JSON.stringify(systemSettings));
-      } catch (e) {}
-
-      const result = await safeApiMutate('/api/system-settings', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(systemSettings),
-      });
-
-      const updatedSettings = result.success && result.data?.settings ? result.data.settings : systemSettings;
-      setSystemSettings(updatedSettings);
-      try {
-        localStorage.setItem('atomos_system_settings', JSON.stringify(updatedSettings));
-        window.dispatchEvent(new CustomEvent('atomos_system_settings_updated', { detail: updatedSettings }));
-      } catch (e) {}
-      showNotification('success', 'Configurações globais e script do chatbot atualizados com sucesso!');
+      const saved = await saveRemoteSystemSettings(systemSettings);
+      setSystemSettings(saved);
+      showNotification('success', 'Configurações globais e script do chatbot atualizados com sucesso no Supabase e no sistema!');
       setShowSettingsModal(false);
     } catch (err: any) {
       showNotification('error', err.message || 'Erro ao salvar configurações.');
@@ -1829,7 +1807,7 @@ Qualquer ajuste de dados, telefones ou ativação de novos recursos é só falar
                             chatbotEmbedCode: val.includes('<script') ? val : `<script src='${scriptUrl}'></script>`,
                           });
                         }}
-                        placeholder="https://cdn.jotfor.ms/agent/embedjs/01a0bfa1d8107000848905e7ba8cb2c582a4/embed.js"
+                        placeholder="https://cdn.jotfor.ms/agent/embedjs/01a0c0ce84b870008af657718192cda49e69/embed.js"
                         className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white outline-none font-mono"
                       />
                       <div className="flex items-center gap-2 pt-1 flex-wrap">
@@ -1838,8 +1816,8 @@ Qualquer ajuste de dados, telefones ou ativação de novos recursos é só falar
                           onClick={() =>
                             setSystemSettings({
                               ...systemSettings,
-                              chatbotScriptUrl: 'https://cdn.jotfor.ms/agent/embedjs/01a0bfa1d8107000848905e7ba8cb2c582a4/embed.js',
-                              chatbotEmbedCode: "<script src='https://cdn.jotfor.ms/agent/embedjs/01a0bfa1d8107000848905e7ba8cb2c582a4/embed.js'></script>",
+                              chatbotScriptUrl: 'https://cdn.jotfor.ms/agent/embedjs/01a0c0ce84b870008af657718192cda49e69/embed.js',
+                              chatbotEmbedCode: "<script src='https://cdn.jotfor.ms/agent/embedjs/01a0c0ce84b870008af657718192cda49e69/embed.js'></script>",
                             })
                           }
                           className="px-2.5 py-1.5 text-[11px] font-semibold text-sky-600 hover:text-sky-700 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/50 border border-sky-200 dark:border-sky-800 rounded-lg transition"

@@ -22,7 +22,7 @@ import {
   Clock,
 } from 'lucide-react';
 import { DigitalCard } from '../types.ts';
-import { initSupabase, mapDbToDigitalCard } from '../lib/supabase.ts';
+import { initSupabase, mapDbToDigitalCard, getRemoteSystemSettings } from '../lib/supabase.ts';
 import { parseAiAgentInput, getAiAgentButtonGlowClass, getAiAgentButtonPaddingY } from '../../shared/digital-card-ai-agent.ts';
 import { getContrastTextColor, isConfiguredLink, hexToRgba, getCardContentContrastColors, isNeumorphismTheme, getNeumorphicCardStyles, isGlassmorphismTheme, getGlassmorphicCardStyles } from '../../shared/digital-card-appearance.ts';
 import { downloadVCard } from '../../shared/digital-card-vcf.ts';
@@ -186,14 +186,10 @@ export const DigitalCardPublic: React.FC<DigitalCardPublicProps> = ({ slug }) =>
   });
 
   useEffect(() => {
-    fetch('/api/system-settings')
-      .then((r) => (r.ok ? r.json() : null))
+    getRemoteSystemSettings()
       .then((data) => {
         if (data) {
           setSystemSettings(data);
-          try {
-            localStorage.setItem('atomos_system_settings', JSON.stringify(data));
-          } catch {}
         }
       })
       .catch(() => {});

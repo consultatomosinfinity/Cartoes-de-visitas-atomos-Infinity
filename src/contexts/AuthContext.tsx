@@ -11,6 +11,7 @@ import {
   getUserProfile,
   isMasterEmail,
   MASTER_EMAILS,
+  getRemoteSystemSettings,
 } from '../lib/supabase.ts';
 import { UserProfile, UserRole, UserPlan } from '../types.ts';
 
@@ -200,9 +201,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const cleanEmail = email.trim().toLowerCase();
 
     // 1. Verifica políticas globais do sistema antes do cadastro
-    const settings = await safeApiCall('/api/system-settings', undefined, null);
-    const localSettings = localStorage.getItem('atomos_system_settings') ? JSON.parse(localStorage.getItem('atomos_system_settings')!) : null;
-    const finalSettings = settings || localSettings;
+    const finalSettings = await getRemoteSystemSettings();
     if (finalSettings) {
       if (!isMasterEmail(cleanEmail) && finalSettings.allowPublicRegistration === false) {
         throw new Error(

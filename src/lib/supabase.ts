@@ -1,5 +1,5 @@
 import { createClient, SupabaseClient, User, Session } from '@supabase/supabase-js';
-import { DigitalCard, UserProfile, UserRole, UserPlan, UserAccountStatus } from '../types.ts';
+import { DigitalCard, UserProfile, UserRole, UserPlan, UserAccountStatus, SystemSettings } from '../types.ts';
 
 // Variáveis de ambiente client-side Vite (caso fornecidas no build)
 const ENV_URL = (import.meta as any).env?.VITE_SUPABASE_URL || '';
@@ -350,6 +350,156 @@ export async function adminResetUserPassword(userId: string, email: string, newP
   }
 
   return await res.json();
+}
+
+// --------------------------------------------------------------------------
+// Configurações Globais do Sistema e Chatbot IA (Supabase / Local / API)
+// --------------------------------------------------------------------------
+
+export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
+  requireMasterApproval: false,
+  defaultRole: 'cliente',
+  defaultPlan: 'degustacao',
+  degustacaoDays: 30,
+  allowPublicRegistration: true,
+  masterWhatsApp: '+55 (15) 99625-9353',
+  customWelcomeMessage: '',
+  platformLogoUrl: '/logo-atomos.svg',
+  platformTitle: 'Átomos Infinity',
+  chatbotEnabled: true,
+  chatbotScriptUrl: 'https://cdn.jotfor.ms/agent/embedjs/01a0c0ce84b870008af657718192cda49e69/embed.js',
+  chatbotEmbedCode: "<script src='https://cdn.jotfor.ms/agent/embedjs/01a0c0ce84b870008af657718192cda49e69/embed.js'></script>",
+  chatbotPages: 'all',
+  footerLinkClickable: true,
+  footerLinkUrl: 'https://consultatomosinfinity.com.br',
+  updatedAt: new Date().toISOString(),
+};
+
+export async function getRemoteSystemSettings(): Promise<SystemSettings> {
+  // 1. Tenta carregar do Supabase (Fonte Canônica)
+  try {
+    const client = await initSupabase();
+    if (client) {
+      const { data, error } = await client
+        .from('system_settings')
+        .select('*')
+        .order('id', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (!error && data) {
+        const rawPayload = data.payload || data.settings || data;
+        const loaded: SystemSettings = {
+          ...DEFAULT_SYSTEM_SETTINGS,
+          ...rawPayload,
+          chatbotEnabled: rawPayload.chatbotEnabled !== false && rawPayload.chatbot_enabled !== false,
+          chatbotScriptUrl: rawPayload.chatbotScriptUrl || rawPayload.chatbot_script_url || DEFAULT_SYSTEM_SETTINGS.chatbotScriptUrl,
+          chatbotEmbedCode: rawPayload.chatbotEmbedCode || rawPayload.chatbot_embed_code || DEFAULT_SYSTEM_SETTINGS.chatbotEmbedCode,
+          chatbotPages: rawPayload.chatbotPages || rawPayload.chatbot_pages || DEFAULT_SYSTEM_SETTINGS.chatbotPages,
+          footerLinkClickable: rawPayload.footerLinkClickable !== false && rawPayload.footer_link_clickable !== false,
+          footerLinkUrl: rawPayload.footerLinkUrl || rawPayload.footer_link_url || DEFAULT_SYSTEM_SETTINGS.footerLinkUrl,
+          platformTitle: rawPayload.platformTitle || rawPayload.platform_title || DEFAULT_SYSTEM_SETTINGS.platformTitle,
+          platformLogoUrl: rawPayload.platformLogoUrl || rawPayload.platform_logo_url || DEFAULT_SYSTEM_SETTINGS.platformLogoUrl,
+          updatedAt: data.updated_at || rawPayload.updatedAt || new Date().toISOString(),
+        };
+
+        try {
+          localStorage.setItem('atomos_system_settings', JSON.stringify(loaded));
+        } catch {}
+        return loaded;
+      }
+    }
+  } catch (sbErr) {
+    console.warn('Consulta de configurações no Supabase não concluída:', sbErr);
+  }
+
+  // 2. Tenta API backend Express (/api/system-settings)
+  try {
+    const res = await fetch('/api/system-settings?_t=' + Date.now(), { cache: 'no-store' });
+    if (res.ok) {
+      const contentType = res.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        const data = await res.json();
+        if (data && typeof data === 'object') {
+          const merged = { ...DEFAULT_SYSTEM_SETTINGS, ...data };
+          try {
+            localStorage.setItem('atomos_system_settings', JSON.stringify(merged));
+          } catch {}
+          return merged;
+        }
+      }
+    }
+  } catch {}
+
+  // 3. Fallback no localStorage
+  try {
+    const cached = localStorage.getItem('atomos_system_settings');
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      return { ...DEFAULT_SYSTEM_SETTINGS, ...parsed };
+    }
+  } catch {}
+
+  return DEFAULT_SYSTEM_SETTINGS;
+}
+
+export async function saveRemoteSystemSettings(settings: SystemSettings): Promise<SystemSettings> {
+  const updated: SystemSettings = {
+    ...DEFAULT_SYSTEM_SETTINGS,
+    ...settings,
+    updatedAt: new Date().toISOString(),
+  };
+
+  // 1. Salva imediatamente em localStorage e notifica UI
+  try {
+    localStorage.setItem('atomos_system_settings', JSON.stringify(updated));
+    window.dispatchEvent(new CustomEvent('atomos_system_settings_updated', { detail: updated }));
+  } catch {}
+
+  // 2. Persiste no Supabase como fonte canônica
+  try {
+    const client = await initSupabase();
+    if (client) {
+      const dbPayload: any = {
+        id: 1,
+        payload: updated,
+        chatbot_enabled: updated.chatbotEnabled !== false,
+        chatbot_script_url: updated.chatbotScriptUrl,
+        chatbot_embed_code: updated.chatbotEmbedCode,
+        chatbot_pages: updated.chatbotPages,
+        require_master_approval: Boolean(updated.requireMasterApproval),
+        default_role: updated.defaultRole,
+        default_plan: updated.defaultPlan,
+        degustacao_days: updated.degustacaoDays,
+        allow_public_registration: Boolean(updated.allowPublicRegistration),
+        master_whatsapp: updated.masterWhatsApp,
+        platform_logo_url: updated.platformLogoUrl,
+        platform_title: updated.platformTitle,
+        footer_link_clickable: updated.footerLinkClickable !== false,
+        footer_link_url: updated.footerLinkUrl,
+        updated_at: updated.updatedAt,
+      };
+
+      try {
+        await client.from('system_settings').upsert(dbPayload, { onConflict: 'id' });
+      } catch (upsertErr) {
+        console.warn('Tentativa de salvar na tabela system_settings do Supabase:', upsertErr);
+      }
+    }
+  } catch (err) {
+    console.warn('Erro ao salvar configurações no Supabase:', err);
+  }
+
+  // 3. Persiste no servidor Express caso disponível
+  try {
+    await fetch('/api/system-settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updated),
+    });
+  } catch {}
+
+  return updated;
 }
 
 // --------------------------------------------------------------------------
