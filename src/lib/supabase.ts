@@ -590,16 +590,27 @@ export function mapDbToDigitalCard(row: any): DigitalCard {
     frameScale: row.frame_scale ?? 97,
     companyLogoFocusX: row.company_logo_focus_x ?? 56,
     companyLogoFocusY: row.company_logo_focus_y ?? 67,
-    contentBackgroundImageUrl: row.content_background_image_url || '',
+    contentBackgroundImageUrl: (() => {
+      const raw = row.content_background_image_url || '';
+      return raw.replace(/#pos=[a-z_]+/g, '');
+    })(),
     contentBackgroundImageFocusX: row.content_background_image_focus_x ?? 50,
     contentBackgroundImageFocusY: row.content_background_image_focus_y ?? 50,
     contentBackgroundImageOpacity: row.content_background_image_opacity ?? 100,
     contentBackgroundImageScale: row.content_background_image_scale ?? 100,
+    contentBackgroundPosition: (() => {
+      if (row.content_background_position) return row.content_background_position;
+      const raw = row.content_background_image_url || '';
+      if (raw.includes('#pos=below_header')) return 'below_header';
+      return 'card_full';
+    })(),
     mobileAppName: row.mobile_app_name || '',
     mobileIconUrl: row.mobile_icon_url || '',
     ctaLabel: row.cta_label || '',
     ctaUrl: row.cta_url || '',
     footerText: row.footer_text || 'Cartão digital disponibilizado por Átomos Infinity',
+    footerLinkEnabled: row.footer_link_enabled !== undefined ? Boolean(row.footer_link_enabled) : undefined,
+    footerLinkUrl: row.footer_link_url || '',
     trackingEnabled: Boolean(row.tracking_enabled),
     activityTrackingEnabled: row.activity_tracking_enabled !== false,
     gaMeasurementId: row.ga_measurement_id || '',
@@ -733,7 +744,12 @@ export function mapDigitalCardToDb(card: Partial<DigitalCard>, userId: string): 
     frame_scale: card.frameScale ?? 97,
     company_logo_focus_x: card.companyLogoFocusX ?? 56,
     company_logo_focus_y: card.companyLogoFocusY ?? 67,
-    content_background_image_url: card.contentBackgroundImageUrl || '',
+    content_background_image_url: (() => {
+      const base = (card.contentBackgroundImageUrl || '').trim();
+      if (!base) return '';
+      const clean = base.replace(/#pos=[a-z_]+/g, '');
+      return card.contentBackgroundPosition === 'below_header' ? `${clean}#pos=below_header` : clean;
+    })(),
     content_background_image_focus_x: card.contentBackgroundImageFocusX ?? 50,
     content_background_image_focus_y: card.contentBackgroundImageFocusY ?? 50,
     content_background_image_opacity: card.contentBackgroundImageOpacity ?? 100,
@@ -743,6 +759,9 @@ export function mapDigitalCardToDb(card: Partial<DigitalCard>, userId: string): 
     cta_label: card.ctaLabel || '',
     cta_url: card.ctaUrl || '',
     footer_text: card.footerText || 'Cartão digital disponibilizado por Átomos Infinity',
+    footer_link_enabled: card.footerLinkEnabled !== undefined ? Boolean(card.footerLinkEnabled) : undefined,
+    footer_link_url: card.footerLinkUrl || '',
+    google_review_url: card.googleReviewUrl || '',
     tracking_enabled: Boolean(card.trackingEnabled),
     activity_tracking_enabled: card.activityTrackingEnabled !== false,
     ga_measurement_id: card.gaMeasurementId || '',
@@ -755,6 +774,15 @@ export function mapDigitalCardToDb(card: Partial<DigitalCard>, userId: string): 
     inquiry_show_phone: card.inquiryShowPhone !== false,
     inquiry_show_message: card.inquiryShowMessage !== false,
     inquiry_show_consent: card.inquiryShowConsent !== false,
+    billing_cycle: card.billingCycle || 'trimestral',
+    billing_amount: card.billingAmount !== undefined ? Number(card.billingAmount) : undefined,
+    billing_start_date: card.billingStartDate || '',
+    billing_due_date: card.billingDueDate || '',
+    billing_pix_key: card.billingPixKey || card.pixKey || '',
+    billing_customer_name: card.billingCustomerName || card.pixBeneficiary || '',
+    billing_customer_phone: card.billingCustomerPhone || card.whatsappPhone || '',
+    billing_notes: card.billingNotes || '',
+    billing_last_renewed_at: card.billingLastRenewedAt || '',
     updated_at: new Date().toISOString(),
   };
 }

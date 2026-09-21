@@ -5,5 +5,61 @@
     "kind": "outbound_click",
     "destination": "whatsapp",
     "createdAt": "2026-09-15T15:45:59.116Z"
+  },
+  {
+    "id": 1789949624762,
+    "cardId": 1,
+    "kind": "card_open",
+    "destination": null,
+    "createdAt": "2026-09-21T00:13:44.762Z"
+  },
+  {
+    "id": 1789949624929,
+    "cardId": 1,
+    "kind": "card_open",
+    "destination": null,
+    "createdAt": "2026-09-21T00:13:44.929Z"
+  },
+  {
+    "id": 1789951734081,
+    "cardId": 2,
+    "kind": "card_open",
+    "destination": null,
+    "createdAt": "2026-09-21T00:48:54.081Z"
+  },
+  {
+    "id": 1789951734236,
+    "cardId": 2,
+    "kind": "card_open",
+    "destination": null,
+    "createdAt": "2026-09-21T00:48:54.236Z"
+  },
+  {
+    "id": 1789952744232,
+    "cardId": 1789952501542,
+    "kind": "card_open",
+    "destination": null,
+    "createdAt": "2026-09-21T01:05:44.232Z"
+  },
+  {
+    "id": 1789952744378,
+    "cardId": 1789952501542,
+    "kind": "card_open",
+    "destination": null,
+    "createdAt": "2026-09-21T01:05:44.378Z"
+  },
+  {
+    "id": 1789953395819,
+    "cardId": 2,
+    "kind": "card_open",
+    "destination": null,
+    "createdAt": "2026-09-21T01:16:35.819Z"
+  },
+  {
+    "id": 1789953395861,
+    "cardId": 2,
+    "kind": "card_open",
+    "destination": null,
+    "createdAt": "2026-09-21T01:16:35.861Z"
   }
 ]

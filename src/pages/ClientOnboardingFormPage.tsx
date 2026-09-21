@@ -132,6 +132,14 @@ const THEME_OPTIONS = [
     accent: '#38BDF8',
     desc: 'Estilo dark mode universal para qualquer área profissional.',
   },
+  {
+    id: 'neumorphism_light',
+    name: 'Neumorfismo Claro',
+    tag: 'Soft UI 3D Relevo',
+    bg: '#E0E5EC',
+    accent: '#1D4ED8',
+    desc: 'Design moderno com relevo tátil, sombras suaves e alta legibilidade.',
+  },
 ];
 
 export function ClientOnboardingFormPage() {
@@ -483,15 +491,15 @@ export function ClientOnboardingFormPage() {
           <div className="absolute top-0 right-0 -mt-8 -mr-8 w-48 h-48 bg-white/10 rounded-full blur-2xl pointer-events-none" />
           
           <div className="relative z-10">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 backdrop-blur-md text-xs font-extrabold uppercase tracking-wider text-sky-100 mb-3 border border-white/20">
-              <Sparkles size={13} className="text-amber-300" />
-              <span>Criação de Cartão Digital Interativo</span>
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-950/70 backdrop-blur-md text-xs font-black uppercase tracking-wider mb-3.5 border border-white/25 shadow-md">
+              <Sparkles size={14} className="text-amber-300 shrink-0" />
+              <span className="text-white font-black tracking-wide">Criação de Cartão Digital Interativo</span>
             </div>
 
-            <h2 className="text-2xl sm:text-3xl font-black tracking-tight leading-tight mb-2">
+            <h2 className="text-2xl sm:text-3xl font-black tracking-tight leading-tight mb-2 text-white drop-shadow-xs">
               Envie seus dados em 2 minutos
             </h2>
-            <p className="text-sky-100 text-xs sm:text-sm max-w-xl leading-relaxed">
+            <p className="text-white/95 text-xs sm:text-sm max-w-xl leading-relaxed font-medium">
               Preencha os campos abaixo com as informações que deseja exibir no seu cartão. Nossa equipe cuidará de todo o design e configuração para você!
             </p>
 
@@ -508,7 +516,7 @@ export function ClientOnboardingFormPage() {
         </div>
 
         {/* Formulário */}
-        <form onSubmit={handleSubmit} className="space-y-8">
+        <form onSubmit={handleSubmit} noValidate className="space-y-8">
           {errorMessage && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
@@ -916,7 +924,7 @@ export function ClientOnboardingFormPage() {
                       <div className="relative">
                         <Camera size={15} className="absolute left-3 top-3 text-slate-400" />
                         <input
-                          type="url"
+                          type="text"
                           placeholder="https://exemplo.com/minha-foto.jpg"
                           value={photoUrl.startsWith('data:') ? '' : photoUrl}
                           onChange={(e) => setPhotoUrl(e.target.value)}
@@ -1042,7 +1050,7 @@ export function ClientOnboardingFormPage() {
                       <div className="relative">
                         <ImageIcon size={15} className="absolute left-3 top-3 text-slate-400" />
                         <input
-                          type="url"
+                          type="text"
                           placeholder="https://exemplo.com/logotipo.png"
                           value={logoUrl.startsWith('data:') ? '' : logoUrl}
                           onChange={(e) => setLogoUrl(e.target.value)}

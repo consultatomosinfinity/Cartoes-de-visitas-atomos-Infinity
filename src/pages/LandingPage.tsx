@@ -49,6 +49,8 @@ const DEMO_CARD_FALLBACK: Partial<DigitalCard> = {
   ctaLabel: 'Conheça a Átomos Infinity',
   ctaUrl: 'https://consultatomosinfinity.com.br',
   footerText: 'Cartão digital disponibilizado por Átomos Infinity',
+  footerLinkEnabled: true,
+  footerLinkUrl: 'https://consultatomosinfinity.com.br',
   appearanceTheme: 'padrao',
   backgroundColor: '#12375B',
   buttonColor: '#1A7FBE',

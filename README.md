@@ -2,6 +2,8 @@
 
 Sistema profissional completo para criação, gerenciamento e publicação de Cartões Digitais interativos (PWA), com suporte a QR Code personalizável, atendente virtual com inteligência artificial, formulário de primeiro contato e persistência segura em nuvem com **Supabase (PostgreSQL, Auth e Storage)**.
 
+> 📋 **Documento de Auditoria e Arquitetura Completa:** Consulte o arquivo [`AUDITORIA_E_ARQUITETURA_SISTEMA.md`](./AUDITORIA_E_ARQUITETURA_SISTEMA.md) para a documentação técnica integral do sistema, dicionário de dados (108 colunas), endpoints de API, fluxos de segurança LGPD/OWASP e roteiro de testes para auditoria.
+
 ---
 
 ## 1. Como o Supabase foi integrado ao projeto

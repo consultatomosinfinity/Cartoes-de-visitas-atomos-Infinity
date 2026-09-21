@@ -211,6 +211,12 @@ const DEFAULT_SYSTEM_SETTINGS = {
   customWelcomeMessage: '',
   platformLogoUrl: '/logo-atomos.svg',
   platformTitle: 'Átomos Infinity',
+  chatbotEnabled: true,
+  chatbotScriptUrl: 'https://cdn.jotfor.ms/agent/embedjs/01a0bfa1d8107000848905e7ba8cb2c582a4/embed.js',
+  chatbotEmbedCode: "<script src='https://cdn.jotfor.ms/agent/embedjs/01a0bfa1d8107000848905e7ba8cb2c582a4/embed.js'></script>",
+  chatbotPages: 'all',
+  footerLinkClickable: true,
+  footerLinkUrl: 'https://consultatomosinfinity.com.br',
   updatedAt: new Date().toISOString(),
 };
 
@@ -264,6 +270,8 @@ const DEFAULT_LANDING_TEMPLATE = {
   ctaLabel: 'Conheça a Átomos Infinity',
   ctaUrl: 'https://consultatomosinfinity.com.br',
   footerText: 'Cartão digital disponibilizado por Átomos Infinity',
+  footerLinkEnabled: true,
+  footerLinkUrl: 'https://consultatomosinfinity.com.br',
   appearanceTheme: 'padrao',
   backgroundColor: '#12375B',
   headerOpacity: 100,
@@ -287,6 +295,7 @@ const DEFAULT_LANDING_TEMPLATE = {
   trackingEnabled: true,
   activityTrackingEnabled: true,
   inquiryEnabled: true,
+  contentBackgroundPosition: 'card_full',
   status: 'ativo',
 };
 
@@ -312,6 +321,401 @@ function writeJson<T>(file: string, data: T): void {
   } catch (err) {
     console.error(`Erro ao salvar ${file}:`, err);
   }
+}
+
+// ----------------------------------------------------
+// Funções canônicas de mapeamento do Servidor (Supabase <-> Card Model)
+// ----------------------------------------------------
+function mapDbToCardServer(row: any): any {
+  if (!row) return null;
+  return {
+    id: row.id,
+    userId: row.user_id,
+    slug: row.slug,
+    name: row.name || '',
+    jobTitle: row.job_title || '',
+    brandName: row.brand_name || 'Átomos Infinity',
+    status: row.status || 'ativo',
+    phone: row.phone || '',
+    email: row.email || '',
+    whatsappPhone: row.whatsapp_phone || '',
+    websiteUrl: row.website_url || '',
+    address: row.address || '',
+    addressNumber: row.address_number || '',
+    postalCode: row.postal_code || '',
+    city: row.city || '',
+    state: row.state || '',
+    country: row.country || 'Brasil',
+    googleMapsUrl: (() => {
+      const raw = row.google_maps_url || '';
+      let clean = raw;
+      if (clean.includes('###review=')) clean = clean.split('###review=')[0];
+      if (clean.includes('###pix=')) clean = clean.split('###pix=')[0];
+      if (clean.includes('###hours=')) clean = clean.split('###hours=')[0];
+      return clean.trim();
+    })(),
+    googleReviewUrl: (() => {
+      const raw = row.google_maps_url || '';
+      if (raw.includes('###review=')) {
+        const afterReview = raw.split('###review=')[1] || '';
+        let result = afterReview;
+        if (result.includes('###pix=')) result = result.split('###pix=')[0];
+        if (result.includes('###hours=')) result = result.split('###hours=')[0];
+        return result.trim();
+      }
+      return row.google_review_url || '';
+    })(),
+    pixKey: (() => {
+      const raw = row.google_maps_url || '';
+      if (raw.includes('###pix=')) {
+        try {
+          const encoded = raw.split('###pix=')[1] || '';
+          const cleanEncoded = encoded.split('###hours=')[0];
+          const parsed = JSON.parse(decodeURIComponent(cleanEncoded));
+          if (parsed && parsed.key) return parsed.key;
+        } catch (_) {}
+      }
+      return row.pix_key || row.billing_pix_key || '';
+    })(),
+    pixType: (() => {
+      const raw = row.google_maps_url || '';
+      if (raw.includes('###pix=')) {
+        try {
+          const encoded = raw.split('###pix=')[1] || '';
+          const cleanEncoded = encoded.split('###hours=')[0];
+          const parsed = JSON.parse(decodeURIComponent(cleanEncoded));
+          if (parsed && parsed.type) return parsed.type;
+        } catch (_) {}
+      }
+      return row.pix_type || 'telefone';
+    })(),
+    pixBeneficiary: (() => {
+      const raw = row.google_maps_url || '';
+      if (raw.includes('###pix=')) {
+        try {
+          const encoded = raw.split('###pix=')[1] || '';
+          const cleanEncoded = encoded.split('###hours=')[0];
+          const parsed = JSON.parse(decodeURIComponent(cleanEncoded));
+          if (parsed && parsed.beneficiary) return parsed.beneficiary;
+        } catch (_) {}
+      }
+      return row.pix_beneficiary || row.billing_customer_name || '';
+    })(),
+    pixCity: (() => {
+      const raw = row.google_maps_url || '';
+      if (raw.includes('###pix=')) {
+        try {
+          const encoded = raw.split('###pix=')[1] || '';
+          const cleanEncoded = encoded.split('###hours=')[0];
+          const parsed = JSON.parse(decodeURIComponent(cleanEncoded));
+          if (parsed && parsed.city) return parsed.city;
+        } catch (_) {}
+      }
+      return row.pix_city || row.city || 'Brasil';
+    })(),
+    businessHours: (() => {
+      const raw = row.google_maps_url || '';
+      if (raw.includes('###hours=')) {
+        try {
+          const encoded = raw.split('###hours=')[1] || '';
+          const parsed = JSON.parse(decodeURIComponent(encoded));
+          if (parsed && parsed.hours) return parsed.hours;
+        } catch (_) {}
+      }
+      return row.business_hours || '';
+    })(),
+    businessHoursEnabled: (() => {
+      const raw = row.google_maps_url || '';
+      if (raw.includes('###hours=')) {
+        try {
+          const encoded = raw.split('###hours=')[1] || '';
+          const parsed = JSON.parse(decodeURIComponent(encoded));
+          if (parsed && typeof parsed.enabled === 'boolean') return parsed.enabled;
+        } catch (_) {}
+      }
+      return row.business_hours_enabled !== false;
+    })(),
+    hideBusinessHours: (() => {
+      const raw = row.google_maps_url || '';
+      if (raw.includes('###hours=')) {
+        try {
+          const encoded = raw.split('###hours=')[1] || '';
+          const parsed = JSON.parse(decodeURIComponent(encoded));
+          if (parsed && typeof parsed.hidden === 'boolean') return parsed.hidden;
+        } catch (_) {}
+      }
+      return Boolean(row.hide_business_hours);
+    })(),
+    businessHoursStatus: row.business_hours_status || '',
+    summary: row.summary || '',
+    instagramUrl: row.instagram_url || '',
+    linkedinUrl: row.linkedin_url || '',
+    facebookUrl: row.facebook_url || '',
+    youtubeUrl: row.youtube_url || '',
+    aiAgentUrl: row.ai_agent_url || '',
+    siteAiAgentEnabled: Boolean(row.site_ai_agent_enabled),
+    aiAgentButtonText: row.ai_agent_button_text || 'Atendente Virtual',
+    aiAgentButtonColor: row.ai_agent_button_color || '#7C3AED',
+    aiAgentButtonTextColor: row.ai_agent_button_text_color || '#FFFFFF',
+    aiAgentGlowEnabled: row.ai_agent_glow_enabled !== false,
+    aiAgentGlowIntensity: row.ai_agent_glow_intensity || 'medio',
+    aiAgentButtonSize: row.ai_agent_button_size || 'padrao',
+    aiAgentButtonPaddingY: row.ai_agent_button_padding_y ?? 12,
+    aiAgentButtonBorderWidth: row.ai_agent_button_border_width ?? 0,
+    aiAgentButtonBorderColor: row.ai_agent_button_border_color || '#A855F7',
+    appearanceTheme: row.appearance_theme || 'padrao',
+    backgroundColor: row.background_color || '#12375B',
+    headerOpacity: row.header_opacity ?? 100,
+    buttonColor: row.button_color || '#1A7FBE',
+    bodyColor: row.body_color || '#EAF1F7',
+    contentColor: row.content_color || '#FFFFFF',
+    contentOpacity: row.content_opacity ?? 100,
+    fontFamily: row.font_family || 'sans',
+    supportTextColor: row.support_text_color || '#64748B',
+    summaryTextColor: row.summary_text_color || '',
+    qrCodeTextColor: row.qr_code_text_color || '#1E293B',
+    qrCodeSectionBgColor: row.qr_code_section_bg_color || '',
+    inquiryTextColor: row.inquiry_text_color || '',
+    dividerColor: row.divider_color || '#D7E0E7',
+    dividerWidth: row.divider_width ?? 1,
+    contactIconColor: row.contact_icon_color || '#1A507F',
+    contactIconSize: row.contact_icon_size ?? 18,
+    buttonsBorderRadius: row.buttons_border_radius ?? 16,
+    vcardButtonColor: row.vcard_button_color || '#1A7FBE',
+    vcardButtonTextColor: row.vcard_button_text_color || '#FFFFFF',
+    vcardButtonBorderRadius: row.vcard_button_border_radius,
+    whatsappButtonColor: row.whatsapp_button_color || '#059669',
+    whatsappButtonTextColor: row.whatsapp_button_text_color || '#FFFFFF',
+    whatsappButtonBorderRadius: row.whatsapp_button_border_radius,
+    pwaButtonColor: row.pwa_button_color || '#0F172A',
+    pwaButtonTextColor: row.pwa_button_text_color || '#FFFFFF',
+    pwaButtonBorderRadius: row.pwa_button_border_radius,
+    qrCodeStyle: row.qr_code_style || 'arredondado',
+    qrCodeForegroundColor: row.qr_code_foreground_color || '#12375B',
+    qrCodeBackgroundColor: row.qr_code_background_color || '#FFFFFF',
+    qrCodeLogoUrl: row.qr_code_logo_url || '',
+    qrCodeIncludeLogo: row.qr_code_include_logo !== false,
+    qrCodeLogoSize: Number(row.qr_code_logo_size || 0.22),
+    qrCodeFrameStyle: row.qr_code_frame_style || 'none',
+    qrCodeFrameText: row.qr_code_frame_text || 'SCAN ME',
+    qrCodeFrameColor: row.qr_code_frame_color || '',
+    qrCodeFrameTextColor: row.qr_code_frame_text_color || '#FFFFFF',
+    qrCodeDotsStyle: row.qr_code_dots_style || 'square',
+    qrCodeCornersSquareStyle: row.qr_code_corners_square_style || 'square',
+    qrCodeCornersSquareColor: row.qr_code_corners_square_color || '',
+    qrCodeCornersDotStyle: row.qr_code_corners_dot_style || 'square',
+    qrCodeCornersDotColor: row.qr_code_corners_dot_color || '',
+    qrCodeGradientEnabled: Boolean(row.qr_code_gradient_enabled),
+    qrCodeGradientType: row.qr_code_gradient_type || 'linear',
+    qrCodeGradientStartColor: row.qr_code_gradient_start_color || '#12375B',
+    qrCodeGradientEndColor: row.qr_code_gradient_end_color || '#1A7FBE',
+    qrCodeTransparentBg: Boolean(row.qr_code_transparent_bg),
+    imageUrl: row.image_url || '',
+    imageFocusX: row.image_focus_x ?? 50,
+    imageFocusY: row.image_focus_y ?? 50,
+    companyLogoUrl: row.company_logo_url || '',
+    frameScale: row.frame_scale ?? 97,
+    companyLogoFocusX: row.company_logo_focus_x ?? 56,
+    companyLogoFocusY: row.company_logo_focus_y ?? 67,
+    contentBackgroundImageUrl: (() => {
+      const raw = row.content_background_image_url || '';
+      return raw.replace(/#pos=[a-z_]+/g, '');
+    })(),
+    contentBackgroundImageFocusX: row.content_background_image_focus_x ?? 50,
+    contentBackgroundImageFocusY: row.content_background_image_focus_y ?? 50,
+    contentBackgroundImageOpacity: row.content_background_image_opacity ?? 100,
+    contentBackgroundImageScale: row.content_background_image_scale ?? 100,
+    contentBackgroundPosition: (() => {
+      if (row.content_background_position) return row.content_background_position;
+      const raw = row.content_background_image_url || '';
+      if (raw.includes('#pos=below_header')) return 'below_header';
+      return 'card_full';
+    })(),
+    mobileAppName: row.mobile_app_name || '',
+    mobileIconUrl: row.mobile_icon_url || '',
+    ctaLabel: row.cta_label || '',
+    ctaUrl: row.cta_url || '',
+    footerText: row.footer_text || 'Cartão digital disponibilizado por Átomos Infinity',
+    footerLinkEnabled: row.footer_link_enabled !== undefined ? Boolean(row.footer_link_enabled) : undefined,
+    footerLinkUrl: row.footer_link_url || '',
+    trackingEnabled: Boolean(row.tracking_enabled),
+    activityTrackingEnabled: row.activity_tracking_enabled !== false,
+    gaMeasurementId: row.ga_measurement_id || '',
+    metaPixelId: row.meta_pixel_id || '',
+    gtmContainerId: row.gtm_container_id || '',
+    inquiryEnabled: row.inquiry_enabled !== false,
+    hideInquiryForm: Boolean(row.hide_inquiry_form),
+    inquiryShowName: row.inquiry_show_name !== false,
+    inquiryShowEmail: row.inquiry_show_email !== false,
+    inquiryShowPhone: row.inquiry_show_phone !== false,
+    inquiryShowMessage: row.inquiry_show_message !== false,
+    inquiryShowConsent: row.inquiry_show_consent !== false,
+    billingCycle: row.billing_cycle || 'trimestral',
+    billingAmount: row.billing_amount !== undefined ? Number(row.billing_amount) : undefined,
+    billingStartDate: row.billing_start_date || '',
+    billingDueDate: row.billing_due_date || '',
+    billingPixKey: row.billing_pix_key || '',
+    billingCustomerName: row.billing_customer_name || '',
+    billingCustomerPhone: row.billing_customer_phone || '',
+    billingNotes: row.billing_notes || '',
+    billingLastRenewedAt: row.billing_last_renewed_at || '',
+    createdAt: row.created_at || new Date().toISOString(),
+    updatedAt: row.updated_at || new Date().toISOString(),
+  };
+}
+
+function mapCardToDbServer(card: any, userId?: string): any {
+  return {
+    user_id: userId || card.userId || card.user_id || '00000000-0000-0000-0000-000000000000',
+    slug: (card.slug || '').toLowerCase().trim(),
+    name: card.name || 'Novo Cartão',
+    job_title: card.jobTitle || card.job_title || '',
+    brand_name: card.brandName || card.brand_name || 'Átomos Infinity',
+    status: card.status || 'ativo',
+    phone: card.phone || '',
+    email: card.email || '',
+    whatsapp_phone: card.whatsappPhone || card.whatsapp_phone || '',
+    website_url: card.websiteUrl || card.website_url || '',
+    address: card.address || '',
+    address_number: card.addressNumber || card.address_number || '',
+    postal_code: card.postalCode || card.postal_code || '',
+    city: card.city || '',
+    state: card.state || '',
+    country: card.country || 'Brasil',
+    google_maps_url: (() => {
+      const mapsBase = (card.googleMapsUrl || card.google_maps_url || '').trim();
+      let clean = mapsBase;
+      if (clean.includes('###review=')) clean = clean.split('###review=')[0];
+      if (clean.includes('###pix=')) clean = clean.split('###pix=')[0];
+      if (clean.includes('###hours=')) clean = clean.split('###hours=')[0];
+      const reviewPart = (card.googleReviewUrl || card.google_review_url || '').trim() ? `###review=${(card.googleReviewUrl || card.google_review_url).trim()}` : '';
+      const pixPart = (card.pixKey?.trim() || card.pixBeneficiary?.trim() || card.pix_key?.trim())
+        ? `###pix=${encodeURIComponent(JSON.stringify({
+            key: card.pixKey?.trim() || card.pix_key?.trim() || '',
+            type: card.pixType || card.pix_type || 'telefone',
+            beneficiary: card.pixBeneficiary?.trim() || card.pix_beneficiary?.trim() || '',
+            city: card.pixCity?.trim() || card.pix_city?.trim() || '',
+          }))}`
+        : '';
+      const hoursPart = (card.businessHours || card.business_hours)?.trim()
+        ? `###hours=${encodeURIComponent(JSON.stringify({
+            hours: (card.businessHours || card.business_hours).trim(),
+            enabled: card.businessHoursEnabled !== false,
+            hidden: Boolean(card.hideBusinessHours || card.hide_business_hours),
+            status: card.businessHoursStatus || card.business_hours_status || '',
+          }))}`
+        : '';
+      return `${clean}${reviewPart}${pixPart}${hoursPart}`;
+    })(),
+    summary: card.summary || '',
+    instagram_url: card.instagramUrl || card.instagram_url || '',
+    linkedin_url: card.linkedinUrl || card.linkedin_url || '',
+    facebook_url: card.facebookUrl || card.facebook_url || '',
+    youtube_url: card.youtubeUrl || card.youtube_url || '',
+    ai_agent_url: card.aiAgentUrl || card.ai_agent_url || '',
+    site_ai_agent_enabled: Boolean(card.siteAiAgentEnabled || card.site_ai_agent_enabled),
+    ai_agent_button_text: card.aiAgentButtonText || card.ai_agent_button_text || 'Atendente Virtual',
+    ai_agent_button_color: card.aiAgentButtonColor || card.ai_agent_button_color || '#7C3AED',
+    ai_agent_button_text_color: card.aiAgentButtonTextColor || card.ai_agent_button_text_color || '#FFFFFF',
+    ai_agent_glow_enabled: card.aiAgentGlowEnabled !== false && card.ai_agent_glow_enabled !== false,
+    ai_agent_glow_intensity: card.aiAgentGlowIntensity || card.ai_agent_glow_intensity || 'medio',
+    ai_agent_button_size: card.aiAgentButtonSize || card.ai_agent_button_size || 'padrao',
+    ai_agent_button_padding_y: card.aiAgentButtonPaddingY ?? card.ai_agent_button_padding_y ?? 12,
+    ai_agent_button_border_width: card.aiAgentButtonBorderWidth ?? card.ai_agent_button_border_width ?? 0,
+    ai_agent_button_border_color: card.aiAgentButtonBorderColor || card.ai_agent_button_border_color || '#A855F7',
+    appearance_theme: card.appearanceTheme || card.appearance_theme || 'padrao',
+    background_color: card.backgroundColor || card.background_color || '#12375B',
+    header_opacity: card.headerOpacity ?? card.header_opacity ?? 100,
+    button_color: card.buttonColor || card.button_color || '#1A7FBE',
+    body_color: card.bodyColor || card.body_color || '#EAF1F7',
+    content_color: card.contentColor || card.content_color || '#FFFFFF',
+    content_opacity: card.contentOpacity ?? card.content_opacity ?? 100,
+    font_family: card.fontFamily || card.font_family || 'sans',
+    support_text_color: card.supportTextColor || card.support_text_color || '#64748B',
+    summary_text_color: card.summaryTextColor || card.summary_text_color || '',
+    qr_code_text_color: card.qrCodeTextColor || card.qr_code_text_color || '#1E293B',
+    qr_code_section_bg_color: card.qrCodeSectionBgColor || card.qr_code_section_bg_color || '',
+    inquiry_text_color: card.inquiryTextColor || card.inquiry_text_color || '',
+    divider_color: card.dividerColor || card.divider_color || '#D7E0E7',
+    divider_width: card.dividerWidth ?? card.divider_width ?? 1,
+    contact_icon_color: card.contactIconColor || card.contact_icon_color || '#1A507F',
+    contact_icon_size: card.contactIconSize ?? card.contact_icon_size ?? 18,
+    buttons_border_radius: card.buttonsBorderRadius ?? card.buttons_border_radius ?? 16,
+    vcard_button_color: card.vcardButtonColor || card.vcard_button_color || '#1A7FBE',
+    vcard_button_text_color: card.vcardButtonTextColor || card.vcard_button_text_color || '#FFFFFF',
+    vcard_button_border_radius: card.vcardButtonBorderRadius ?? card.vcard_button_border_radius,
+    whatsapp_button_color: card.whatsappButtonColor || card.whatsapp_button_color || '#059669',
+    whatsapp_button_text_color: card.whatsappButtonTextColor || card.whatsapp_button_text_color || '#FFFFFF',
+    whatsapp_button_border_radius: card.whatsappButtonBorderRadius ?? card.whatsapp_button_border_radius,
+    pwa_button_color: card.pwaButtonColor || card.pwa_button_color || '#0F172A',
+    pwa_button_text_color: card.pwaButtonTextColor || card.pwa_button_text_color || '#FFFFFF',
+    pwa_button_border_radius: card.pwaButtonBorderRadius ?? card.pwa_button_border_radius,
+    qr_code_style: card.qrCodeStyle || card.qr_code_style || 'arredondado',
+    qr_code_foreground_color: card.qrCodeForegroundColor || card.qr_code_foreground_color || '#12375B',
+    qr_code_background_color: card.qrCodeBackgroundColor || card.qr_code_background_color || '#FFFFFF',
+    qr_code_logo_url: card.qrCodeLogoUrl || card.qr_code_logo_url || '',
+    qr_code_include_logo: card.qrCodeIncludeLogo !== false && card.qr_code_include_logo !== false,
+    qr_code_logo_size: Number(card.qrCodeLogoSize || card.qr_code_logo_size || 0.22),
+    qr_code_frame_style: card.qrCodeFrameStyle || card.qr_code_frame_style || 'none',
+    qr_code_frame_text: card.qrCodeFrameText || card.qr_code_frame_text || 'SCAN ME',
+    qr_code_frame_color: card.qrCodeFrameColor || card.qr_code_frame_color || '',
+    qr_code_frame_text_color: card.qrCodeFrameTextColor || card.qr_code_frame_text_color || '#FFFFFF',
+    qr_code_dots_style: card.qrCodeDotsStyle || card.qr_code_dots_style || 'square',
+    qr_code_corners_square_style: card.qrCodeCornersSquareStyle || card.qr_code_corners_square_style || 'square',
+    qr_code_corners_square_color: card.qrCodeCornersSquareColor || card.qr_code_corners_square_color || '',
+    qr_code_corners_dot_style: card.qrCodeCornersDotStyle || card.qr_code_corners_dot_style || 'square',
+    qr_code_corners_dot_color: card.qrCodeCornersDotColor || card.qr_code_corners_dot_color || '',
+    qr_code_gradient_enabled: Boolean(card.qrCodeGradientEnabled || card.qr_code_gradient_enabled),
+    qr_code_gradient_type: card.qrCodeGradientType || card.qr_code_gradient_type || 'linear',
+    qr_code_gradient_start_color: card.qrCodeGradientStartColor || card.qr_code_gradient_start_color || '#12375B',
+    qr_code_gradient_end_color: card.qrCodeGradientEndColor || card.qr_code_gradient_end_color || '#1A7FBE',
+    qr_code_transparent_bg: Boolean(card.qrCodeTransparentBg || card.qr_code_transparent_bg),
+    image_url: card.imageUrl || card.image_url || '',
+    company_logo_url: card.companyLogoUrl || card.company_logo_url || '',
+    frame_scale: card.frameScale ?? card.frame_scale ?? 97,
+    company_logo_focus_x: card.companyLogoFocusX ?? card.company_logo_focus_x ?? 56,
+    company_logo_focus_y: card.companyLogoFocusY ?? card.company_logo_focus_y ?? 67,
+    content_background_image_url: (() => {
+      const base = (card.contentBackgroundImageUrl || card.content_background_image_url || '').trim();
+      if (!base) return '';
+      const clean = base.replace(/#pos=[a-z_]+/g, '');
+      return (card.contentBackgroundPosition === 'below_header' || card.content_background_position === 'below_header') ? `${clean}#pos=below_header` : clean;
+    })(),
+    content_background_image_focus_x: card.contentBackgroundImageFocusX ?? card.content_background_image_focus_x ?? 50,
+    content_background_image_focus_y: card.contentBackgroundImageFocusY ?? card.content_background_image_focus_y ?? 50,
+    content_background_image_opacity: card.contentBackgroundImageOpacity ?? card.content_background_image_opacity ?? 100,
+    content_background_image_scale: card.contentBackgroundImageScale ?? card.content_background_image_scale ?? 100,
+    mobile_app_name: card.mobileAppName || card.mobile_app_name || '',
+    mobile_icon_url: card.mobileIconUrl || card.mobile_icon_url || '',
+    cta_label: card.ctaLabel || card.cta_label || '',
+    cta_url: card.ctaUrl || card.cta_url || '',
+    footer_text: card.footerText || card.footer_text || 'Cartão digital disponibilizado por Átomos Infinity',
+    footer_link_enabled: card.footerLinkEnabled !== undefined ? Boolean(card.footerLinkEnabled) : undefined,
+    footer_link_url: card.footerLinkUrl || card.footer_link_url || '',
+    google_review_url: card.googleReviewUrl || card.google_review_url || '',
+    tracking_enabled: Boolean(card.trackingEnabled || card.tracking_enabled),
+    activity_tracking_enabled: card.activityTrackingEnabled !== false && card.activity_tracking_enabled !== false,
+    ga_measurement_id: card.gaMeasurementId || card.ga_measurement_id || '',
+    meta_pixel_id: card.metaPixelId || card.meta_pixel_id || '',
+    gtm_container_id: card.gtmContainerId || card.gtm_container_id || '',
+    inquiry_enabled: card.inquiryEnabled !== false && card.inquiry_enabled !== false,
+    hide_inquiry_form: Boolean(card.hideInquiryForm || card.hide_inquiry_form),
+    inquiry_show_name: card.inquiryShowName !== false && card.inquiry_show_name !== false,
+    inquiry_show_email: card.inquiryShowEmail !== false && card.inquiry_show_email !== false,
+    inquiry_show_phone: card.inquiryShowPhone !== false && card.inquiry_show_phone !== false,
+    inquiry_show_message: card.inquiryShowMessage !== false && card.inquiry_show_message !== false,
+    inquiry_show_consent: card.inquiryShowConsent !== false && card.inquiry_show_consent !== false,
+    billing_cycle: card.billingCycle || card.billing_cycle || 'trimestral',
+    billing_amount: card.billingAmount !== undefined ? Number(card.billingAmount) : (card.billing_amount !== undefined ? Number(card.billing_amount) : undefined),
+    billing_start_date: card.billingStartDate || card.billing_start_date || '',
+    billing_due_date: card.billingDueDate || card.billing_due_date || '',
+    billing_pix_key: card.billingPixKey || card.billing_pix_key || card.pixKey || card.pix_key || '',
+    billing_customer_name: card.billingCustomerName || card.billing_customer_name || card.pixBeneficiary || card.pix_beneficiary || '',
+    billing_customer_phone: card.billingCustomerPhone || card.billing_customer_phone || card.whatsappPhone || card.whatsapp_phone || '',
+    billing_notes: card.billingNotes || card.billing_notes || '',
+    billing_last_renewed_at: card.billingLastRenewedAt || card.billing_last_renewed_at || '',
+    updated_at: new Date().toISOString(),
+  };
 }
 
 // Configuração de cabeçalhos contra cache para garantir dados sempre atualizados
@@ -402,6 +806,8 @@ function seedInitialData() {
       ctaLabel: 'Conheça a Átomos Infinity',
       ctaUrl: 'https://consultatomosinfinity.com.br',
       footerText: 'Cartão digital disponibilizado por Átomos Infinity',
+      footerLinkEnabled: true,
+      footerLinkUrl: 'https://consultatomosinfinity.com.br',
       appearanceTheme: 'padrao',
       backgroundColor: '#12375B',
       buttonColor: '#1A7FBE',
@@ -772,8 +1178,30 @@ app.get('/api/cards/live-updates', (req, res) => {
 // ----------------------------------------------------
 // MODELO PADRÃO DA LANDING PAGE (Configurável pelo Master)
 // ----------------------------------------------------
-app.get(['/api/settings/landing-card', '/api/landing-card'], (req, res) => {
+app.get(['/api/settings/landing-card', '/api/landing-card'], async (req, res) => {
   setNoCacheHeaders(res);
+  
+  // 1. Prioridade absoluta: Supabase como fonte canônica
+  if (supabaseAdmin) {
+    try {
+      const { data, error } = await supabaseAdmin
+        .from('digital_cards')
+        .select('*')
+        .or('slug.eq.jurandir-hora,id.eq.1')
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!error && data) {
+        const mapped = mapDbToCardServer(data);
+        writeJson(LANDING_TEMPLATE_FILE, mapped);
+        return res.json(mapped);
+      }
+    } catch (err) {
+      console.warn('Erro ao carregar modelo de landing do Supabase:', err);
+    }
+  }
+
   const template = readJson<any>(LANDING_TEMPLATE_FILE, null);
   if (template) {
     return res.json(template);
@@ -786,7 +1214,7 @@ app.get(['/api/settings/landing-card', '/api/landing-card'], (req, res) => {
   return res.json(DEFAULT_LANDING_TEMPLATE);
 });
 
-app.put('/api/settings/landing-card', (req, res) => {
+app.put('/api/settings/landing-card', async (req, res) => {
   const body = req.body;
   if (!body) {
     return res.status(400).json({ error: 'Dados do modelo são obrigatórios.' });
@@ -800,7 +1228,7 @@ app.put('/api/settings/landing-card', (req, res) => {
 
   const existing = readJson<any>(LANDING_TEMPLATE_FILE, DEFAULT_LANDING_TEMPLATE);
 
-  const updatedTemplate = {
+  let updatedTemplate: any = {
     ...DEFAULT_LANDING_TEMPLATE,
     ...existing,
     ...body,
@@ -808,7 +1236,53 @@ app.put('/api/settings/landing-card', (req, res) => {
     updatedAt: new Date().toISOString(),
   };
 
+  // Salva no Supabase como fonte canônica prioritária
+  if (supabaseAdmin) {
+    try {
+      const dbPayload = mapCardToDbServer(updatedTemplate);
+      const targetSlug = updatedTemplate.slug || 'jurandir-hora';
+      
+      // Verifica se já existe por slug ou por ID
+      const { data: existingDb } = await supabaseAdmin
+        .from('digital_cards')
+        .select('id')
+        .or(`slug.eq.${targetSlug},id.eq.${updatedTemplate.id || 1}`)
+        .maybeSingle();
+
+      if (existingDb?.id) {
+        const { data, error } = await supabaseAdmin
+          .from('digital_cards')
+          .update(dbPayload)
+          .eq('id', existingDb.id)
+          .select()
+          .single();
+        if (!error && data) {
+          updatedTemplate = mapDbToCardServer(data);
+        }
+      } else {
+        const { data, error } = await supabaseAdmin
+          .from('digital_cards')
+          .insert(dbPayload)
+          .select()
+          .single();
+        if (!error && data) {
+          updatedTemplate = mapDbToCardServer(data);
+        }
+      }
+    } catch (e) {
+      console.warn('Erro ao sincronizar landing template no Supabase:', e);
+    }
+  }
+
   writeJson(LANDING_TEMPLATE_FILE, updatedTemplate);
+
+  // Sincroniza também no CARDS_FILE caso exista um cartão com o mesmo slug ou ID
+  const cards = readJson<any[]>(CARDS_FILE, []);
+  const cardIdx = cards.findIndex((c) => c.slug === updatedTemplate.slug || c.id === updatedTemplate.id);
+  if (cardIdx !== -1) {
+    cards[cardIdx] = { ...cards[cardIdx], ...updatedTemplate, updatedAt: updatedTemplate.updatedAt };
+    writeJson(CARDS_FILE, cards);
+  }
 
   // Notifica clientes em tempo real
   notifyCardUpdate({ ...updatedTemplate, slug: updatedTemplate.slug || 'jurandir-hora' }, 'updated');
@@ -821,6 +1295,42 @@ app.put('/api/settings/landing-card', (req, res) => {
 });
 
 app.post('/api/settings/landing-card/reset', (req, res) => {
+  const currentTemplate = readJson<any>(LANDING_TEMPLATE_FILE, null);
+  const BACKUP_DIR = path.join(process.cwd(), 'data', 'backups');
+  if (!fs.existsSync(BACKUP_DIR)) {
+    fs.mkdirSync(BACKUP_DIR, { recursive: true });
+  }
+
+  // Se o template atual foi modificado ou pertence a outro profissional (ex: "Stephanie Pazini")
+  // cria backup e preserva automaticamente na lista de Todos os Cartões da Plataforma
+  if (currentTemplate && currentTemplate.name && currentTemplate.name.trim() !== 'Jurandir Hora') {
+    try {
+      const backupPath = path.join(BACKUP_DIR, `landing_template_backup_${Date.now()}.json`);
+      writeJson(backupPath, currentTemplate);
+
+      const cards = readJson<any[]>(CARDS_FILE, []);
+      const existingSlug = (currentTemplate.slug || '').toLowerCase().trim();
+      const cardExists = cards.some(
+        (c) => (existingSlug && c.slug === existingSlug) || (c.name && c.name.toLowerCase() === currentTemplate.name.toLowerCase())
+      );
+
+      if (!cardExists) {
+        const preservedCard = {
+          ...currentTemplate,
+          id: Date.now(),
+          slug: existingSlug || currentTemplate.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
+          status: 'ativo',
+          createdAt: currentTemplate.createdAt || new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        cards.push(preservedCard);
+        writeJson(CARDS_FILE, cards);
+      }
+    } catch (err) {
+      console.warn('Aviso: Erro ao preservar cópia do template anterior:', err);
+    }
+  }
+
   const freshTemplate = {
     ...DEFAULT_LANDING_TEMPLATE,
     updatedAt: new Date().toISOString(),
@@ -830,22 +1340,109 @@ app.post('/api/settings/landing-card/reset', (req, res) => {
 
   return res.json({
     success: true,
-    message: 'Modelo da Landing Page restaurado para os padrões de fábrica!',
+    message: 'Modelo da Landing Page restaurado para os padrões de fábrica! Seus dados personalizados foram preservados em Todos os Cartões.',
     template: freshTemplate,
   });
 });
 
+// Endpoint para duplicar/salvar o modelo da Landing Page diretamente como um cartão em "Todos os Cartões da Plataforma"
+app.post('/api/settings/landing-card/save-as-card', async (req, res) => {
+  try {
+    const currentTemplate = req.body && Object.keys(req.body).length > 0
+      ? req.body
+      : readJson<any>(LANDING_TEMPLATE_FILE, null);
+
+    if (!currentTemplate || !currentTemplate.name) {
+      return res.status(400).json({ error: 'Nenhum modelo válido encontrado para salvar como cartão.' });
+    }
+
+    const cards = readJson<any[]>(CARDS_FILE, []);
+    let baseSlug = (currentTemplate.slug || currentTemplate.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')).trim();
+    if (!baseSlug) baseSlug = 'cartao-' + Date.now();
+
+    let targetSlug = baseSlug;
+    let counter = 1;
+    while (cards.some((c) => c.slug === targetSlug)) {
+      targetSlug = `${baseSlug}-${counter}`;
+      counter++;
+    }
+
+    let newCard: any = {
+      ...currentTemplate,
+      id: Date.now(),
+      slug: targetSlug,
+      status: 'ativo',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (supabaseAdmin) {
+      try {
+        const dbPayload = mapCardToDbServer(newCard);
+        const { data, error } = await supabaseAdmin.from('digital_cards').insert(dbPayload).select().single();
+        if (!error && data) {
+          newCard = mapDbToCardServer(data);
+        }
+      } catch (e) {
+        console.warn('Erro ao salvar novo cartão no Supabase via convert-to-card:', e);
+      }
+    }
+
+    cards.push(newCard);
+    writeJson(CARDS_FILE, cards);
+    notifyCardUpdate(newCard, 'created');
+
+    return res.json({
+      success: true,
+      message: `Cartão de ${newCard.name} salvo com sucesso em Todos os Cartões da Plataforma!`,
+      card: newCard,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Erro ao salvar modelo como cartão.' });
+  }
+});
+
 // Listar todos os cartões (Painel)
-app.get('/api/cards', (req, res) => {
+app.get('/api/cards', async (req, res) => {
   setNoCacheHeaders(res);
+  try {
+    if (supabaseAdmin) {
+      const { data, error } = await supabaseAdmin
+        .from('digital_cards')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (!error && Array.isArray(data) && data.length > 0) {
+        const mappedCards = data.map(mapDbToCardServer);
+        // Sincroniza espelho local CARDS_FILE
+        writeJson(CARDS_FILE, mappedCards);
+        return res.json(mappedCards);
+      }
+    }
+  } catch (err) {
+    console.warn('Erro ao consultar Supabase na listagem /api/cards:', err);
+  }
   const cards = readJson<any[]>(CARDS_FILE, []);
   res.json(cards);
 });
 
 // Obter cartão por ID
-app.get('/api/cards/:id(\\d+)', (req, res) => {
+app.get('/api/cards/:id(\\d+)', async (req, res) => {
   setNoCacheHeaders(res);
   const id = parseInt(req.params.id, 10);
+  if (supabaseAdmin) {
+    try {
+      const { data, error } = await supabaseAdmin
+        .from('digital_cards')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
+      if (!error && data) {
+        return res.json(mapDbToCardServer(data));
+      }
+    } catch (e) {
+      console.warn('Erro ao buscar cartão por ID no Supabase:', e);
+    }
+  }
   const cards = readJson<any[]>(CARDS_FILE, []);
   const card = cards.find((c) => c.id === id);
   if (!card) return res.status(404).json({ error: 'Cartão não encontrado' });
@@ -856,11 +1453,10 @@ app.get('/api/cards/:id(\\d+)', (req, res) => {
 app.get('/api/cards/slug/:slug', async (req, res) => {
   setNoCacheHeaders(res);
   const slug = req.params.slug;
-  const cards = readJson<any[]>(CARDS_FILE, []);
-  let card = cards.find((c) => c.slug === slug);
+  let card: any = null;
 
-  // Se não encontrar no arquivo JSON local, busca diretamente no Supabase
-  if (!card && supabaseAdmin) {
+  // 1. Supabase como fonte canônica prioritária
+  if (supabaseAdmin) {
     try {
       const { data, error } = await supabaseAdmin
         .from('digital_cards')
@@ -869,68 +1465,24 @@ app.get('/api/cards/slug/:slug', async (req, res) => {
         .maybeSingle();
 
       if (!error && data) {
-        card = {
-          id: data.id,
-          userId: data.user_id,
-          slug: data.slug,
-          name: data.name,
-          title: data.title,
-          brandName: data.brand_name,
-          bio: data.bio,
-          summary: data.summary,
-          phone: data.phone,
-          whatsappPhone: data.whatsapp_phone,
-          email: data.email,
-          websiteUrl: data.website_url,
-          address: data.address,
-          addressNumber: data.address_number,
-          city: data.city,
-          state: data.state,
-          country: data.country,
-          postalCode: data.postal_code,
-          googleMapsUrl: data.google_maps_url,
-          instagramUrl: data.instagram_url,
-          linkedinUrl: data.linkedin_url,
-          facebookUrl: data.facebook_url,
-          youtubeUrl: data.youtube_url,
-          avatarUrl: data.avatar_url,
-          bannerUrl: data.banner_url,
-          qrCodeColor: data.qr_code_color,
-          primaryColor: data.primary_color,
-          backgroundColor: data.background_color,
-          textColor: data.text_color,
-          supportTextColor: data.support_text_color,
-          activityTrackingEnabled: data.activity_tracking_enabled,
-          aiAgentUrl: data.ai_agent_url,
-          aiAgentButtonText: data.ai_agent_button_text,
-          aiAgentGlowEnabled: data.ai_agent_glow_enabled,
-          aiAgentGlowIntensity: data.ai_agent_glow_intensity,
-          aiAgentButtonSize: data.ai_agent_button_size,
-          aiAgentButtonPaddingY: data.ai_agent_button_padding_y,
-          aiAgentButtonBorderWidth: data.ai_agent_button_border_width,
-          aiAgentButtonBorderColor: data.ai_agent_button_border_color,
-          appearanceTheme: data.appearance_theme,
-          saveContactBgColor: data.save_contact_bg_color,
-          saveContactTextColor: data.save_contact_text_color,
-          saveContactBorderRadius: data.save_contact_border_radius,
-          mobileAppBgColor: data.mobile_app_bg_color,
-          mobileAppTextColor: data.mobile_app_text_color,
-          mobileAppBorderRadius: data.mobile_app_border_radius,
-          mobileAppName: data.mobile_app_name,
-          aiAgentBgColor: data.ai_agent_bg_color,
-          aiAgentTextColor: data.ai_agent_text_color,
-          aiAgentBorderRadius: data.ai_agent_border_radius,
-          customShareText: data.custom_share_text,
-          ctaLabel: data.cta_label,
-          ctaUrl: data.cta_url,
-          footerText: data.footer_text,
-          status: data.status || 'ativo',
-          createdAt: data.created_at,
-          updatedAt: data.updated_at,
-        };
+        card = mapDbToCardServer(data);
       }
     } catch (e) {
       console.warn('Erro ao consultar Supabase na rota /api/cards/slug/:', e);
+    }
+  }
+
+  // 2. Se não encontrar no Supabase, consulta arquivo JSON local
+  if (!card) {
+    const cards = readJson<any[]>(CARDS_FILE, []);
+    card = cards.find((c) => c.slug === slug);
+  }
+
+  // 3. Se o slug for do modelo padrão da Landing Page, sincroniza com o template
+  const landingTemplate = readJson<any>(LANDING_TEMPLATE_FILE, null);
+  if (landingTemplate && (landingTemplate.slug === slug || slug === 'jurandir-hora')) {
+    if (!card || (landingTemplate.updatedAt && (!card.updatedAt || new Date(landingTemplate.updatedAt) >= new Date(card.updatedAt)))) {
+      card = landingTemplate;
     }
   }
 
@@ -949,7 +1501,7 @@ app.get('/api/cards/slug/:slug', async (req, res) => {
 });
 
 // Criar cartão
-app.post('/api/cards', (req, res) => {
+app.post('/api/cards', async (req, res) => {
   const body = req.body;
   const slug = (body.slug || '').toLowerCase().trim();
 
@@ -971,9 +1523,9 @@ app.post('/api/cards', (req, res) => {
     normalizedAiAgentUrl = normalizeAiAgentInput(body.aiAgentUrl);
   }
 
-  const newCard = {
+  let newCard: any = {
     ...body,
-    id: Date.now(),
+    id: body.id || Date.now(),
     userId: body.userId || 1,
     slug,
     name: body.name || 'Nome do Profissional',
@@ -1006,6 +1558,7 @@ app.post('/api/cards', (req, res) => {
     contentBackgroundImageFocusY: typeof body.contentBackgroundImageFocusY === 'number' ? body.contentBackgroundImageFocusY : 50,
     contentBackgroundImageOpacity: typeof body.contentBackgroundImageOpacity === 'number' ? body.contentBackgroundImageOpacity : 100,
     contentBackgroundImageScale: typeof body.contentBackgroundImageScale === 'number' ? body.contentBackgroundImageScale : 100,
+    contentBackgroundPosition: body.contentBackgroundPosition === 'below_header' ? 'below_header' : 'card_full',
     qrCodeStyle: body.qrCodeStyle || 'quadrado',
     qrCodeForegroundColor: body.qrCodeForegroundColor || '#12375B',
     qrCodeBackgroundColor: body.qrCodeBackgroundColor || '#FFFFFF',
@@ -1034,6 +1587,23 @@ app.post('/api/cards', (req, res) => {
     updatedAt: new Date().toISOString(),
   };
 
+  // Salva no Supabase primeiro se disponível
+  if (supabaseAdmin) {
+    try {
+      const dbPayload = mapCardToDbServer(newCard);
+      const { data, error } = await supabaseAdmin
+        .from('digital_cards')
+        .insert(dbPayload)
+        .select()
+        .single();
+      if (!error && data) {
+        newCard = mapDbToCardServer(data);
+      }
+    } catch (e) {
+      console.warn('Erro ao salvar novo cartão no Supabase:', e);
+    }
+  }
+
   cards.push(newCard);
   writeJson(CARDS_FILE, cards);
   notifyCardUpdate(newCard, 'created');
@@ -1041,64 +1611,137 @@ app.post('/api/cards', (req, res) => {
 });
 
 // Atualizar cartão
-app.put('/api/cards/:id', (req, res) => {
-  const id = parseInt(req.params.id, 10);
+app.put('/api/cards/:id', async (req, res) => {
+  const idParam = req.params.id;
+  const isNumericId = /^\d+$/.test(idParam);
+  const idNum = isNumericId ? parseInt(idParam, 10) : null;
   const cards = readJson<any[]>(CARDS_FILE, []);
-  const index = cards.findIndex((c) => c.id === id);
-  if (index === -1) {
-    return res.status(404).json({ error: 'Cartão não encontrado.' });
+  
+  let localIdx = -1;
+  if (idNum !== null) {
+    localIdx = cards.findIndex((c) => c.id === idNum || String(c.id) === idParam);
+  } else {
+    localIdx = cards.findIndex((c) => String(c.id) === idParam || c.slug === idParam);
   }
 
-  const existing = cards[index];
+  const existing = localIdx !== -1 ? cards[localIdx] : null;
   const body = req.body;
 
   // Slug imutável conforme regra de negócio: não alterar após criação
-  const slug = existing.slug;
+  const slug = existing?.slug || body.slug;
 
   // Normalização do AI Agent
-  let aiAgentUrl = existing.aiAgentUrl;
+  let aiAgentUrl = existing?.aiAgentUrl || body.aiAgentUrl;
   if (body.aiAgentUrl !== undefined) {
     aiAgentUrl = normalizeAiAgentInput(body.aiAgentUrl) || body.aiAgentUrl;
   }
 
-  const updatedCard = {
-    ...existing,
+  let updatedCard: any = {
+    ...(existing || {}),
     ...body,
-    id: existing.id,
-    slug, // Mantém slug inalterado
+    id: existing?.id || (idNum !== null ? idNum : idParam),
+    slug,
     aiAgentUrl,
     updatedAt: new Date().toISOString(),
   };
 
-  cards[index] = updatedCard;
+  // Atualiza no Supabase se disponível
+  if (supabaseAdmin) {
+    try {
+      const dbPayload = mapCardToDbServer(updatedCard);
+      let query = supabaseAdmin.from('digital_cards').update(dbPayload);
+      if (idNum !== null) {
+        query = query.eq('id', idNum);
+      } else {
+        query = query.eq('id', idParam);
+      }
+      const { data, error } = await query.select().maybeSingle();
+      if (!error && data) {
+        updatedCard = mapDbToCardServer(data);
+      }
+    } catch (e) {
+      console.warn('Erro ao atualizar no Supabase no PUT /api/cards/:id:', e);
+    }
+  }
+
+  if (localIdx !== -1) {
+    cards[localIdx] = updatedCard;
+  } else {
+    cards.push(updatedCard);
+  }
   writeJson(CARDS_FILE, cards);
+
+  // Se este cartão corresponder ao slug do landing template, sincroniza o arquivo do template
+  const landingTemplate = readJson<any>(LANDING_TEMPLATE_FILE, null);
+  if (landingTemplate && (landingTemplate.slug === updatedCard.slug || landingTemplate.id === updatedCard.id)) {
+    writeJson(LANDING_TEMPLATE_FILE, { ...landingTemplate, ...updatedCard, updatedAt: updatedCard.updatedAt });
+  }
+
   notifyCardUpdate(updatedCard, 'updated');
   res.json(updatedCard);
 });
 
 // Deletar cartão
-app.delete('/api/cards/:id', (req, res) => {
-  const id = parseInt(req.params.id, 10);
+app.delete('/api/cards/:id', async (req, res) => {
+  const idParam = req.params.id;
+  const isNumericId = /^\d+$/.test(idParam);
+  const idNum = isNumericId ? parseInt(idParam, 10) : null;
   let cards = readJson<any[]>(CARDS_FILE, []);
-  const index = cards.findIndex((c) => c.id === id);
-
-  if (index === -1) {
-    return res.status(404).json({ error: 'Cartão não encontrado' });
+  
+  let localIdx = -1;
+  if (idNum !== null) {
+    localIdx = cards.findIndex((c) => c.id === idNum || String(c.id) === idParam);
+  } else {
+    localIdx = cards.findIndex((c) => String(c.id) === idParam || c.slug === idParam);
   }
 
-  const removed = cards[index];
-  cards.splice(index, 1);
+  const removed = localIdx !== -1 ? cards[localIdx] : { id: idNum || idParam, slug: '' };
 
-  writeJson(CARDS_FILE, cards);
+  if (supabaseAdmin) {
+    try {
+      let query = supabaseAdmin.from('digital_cards').delete();
+      if (idNum !== null) {
+        query = query.eq('id', idNum);
+      } else {
+        query = query.eq('id', idParam);
+      }
+      await query;
+    } catch (e) {
+      console.warn('Erro ao deletar cartão no Supabase:', e);
+    }
+  }
+
+  if (localIdx !== -1) {
+    cards.splice(localIdx, 1);
+    writeJson(CARDS_FILE, cards);
+  }
+
   notifyCardUpdate(removed, 'deleted');
   res.json({ success: true });
 });
 
 // Duplicar / Clonar Cartão (com novo slug exclusivo)
-app.post('/api/cards/:id/duplicate', (req, res) => {
-  const id = parseInt(req.params.id, 10);
+app.post('/api/cards/:id/duplicate', async (req, res) => {
+  const idParam = req.params.id;
+  const isNumericId = /^\d+$/.test(idParam);
+  const idNum = isNumericId ? parseInt(idParam, 10) : null;
   const cards = readJson<any[]>(CARDS_FILE, []);
-  const source = cards.find((c) => c.id === id);
+  let source = cards.find((c) => (idNum !== null && c.id === idNum) || String(c.id) === idParam);
+
+  if (!source && supabaseAdmin) {
+    try {
+      let query = supabaseAdmin.from('digital_cards').select('*');
+      if (idNum !== null) {
+        query = query.eq('id', idNum);
+      } else {
+        query = query.eq('id', idParam);
+      }
+      const { data, error } = await query.maybeSingle();
+      if (!error && data) {
+        source = mapDbToCardServer(data);
+      }
+    } catch (e) {}
+  }
 
   if (!source) {
     return res.status(404).json({ error: 'Cartão de origem não encontrado.' });
@@ -1122,7 +1765,7 @@ app.post('/api/cards/:id/duplicate', (req, res) => {
     }
   }
 
-  const newCard = {
+  let newCard: any = {
     ...source,
     id: Date.now(),
     slug: finalSlug,
@@ -1130,6 +1773,18 @@ app.post('/api/cards/:id/duplicate', (req, res) => {
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
+
+  if (supabaseAdmin) {
+    try {
+      const dbPayload = mapCardToDbServer(newCard);
+      const { data, error } = await supabaseAdmin.from('digital_cards').insert(dbPayload).select().single();
+      if (!error && data) {
+        newCard = mapDbToCardServer(data);
+      }
+    } catch (e) {
+      console.warn('Erro ao duplicar no Supabase:', e);
+    }
+  }
 
   cards.push(newCard);
   writeJson(CARDS_FILE, cards);
@@ -1619,6 +2274,12 @@ app.put('/api/system-settings', (req, res) => {
       customWelcomeMessage,
       platformLogoUrl,
       platformTitle,
+      chatbotEnabled,
+      chatbotScriptUrl,
+      chatbotEmbedCode,
+      chatbotPages,
+      footerLinkClickable,
+      footerLinkUrl,
     } = req.body;
 
     const updated = {
@@ -1634,6 +2295,12 @@ app.put('/api/system-settings', (req, res) => {
       ...(customWelcomeMessage !== undefined ? { customWelcomeMessage: String(customWelcomeMessage) } : {}),
       ...(platformLogoUrl !== undefined ? { platformLogoUrl: String(platformLogoUrl).trim() } : {}),
       ...(platformTitle !== undefined ? { platformTitle: String(platformTitle).trim() } : {}),
+      ...(chatbotEnabled !== undefined ? { chatbotEnabled: Boolean(chatbotEnabled) } : {}),
+      ...(chatbotScriptUrl !== undefined ? { chatbotScriptUrl: String(chatbotScriptUrl).trim() } : {}),
+      ...(chatbotEmbedCode !== undefined ? { chatbotEmbedCode: String(chatbotEmbedCode).trim() } : {}),
+      ...(chatbotPages !== undefined ? { chatbotPages: String(chatbotPages).trim() } : {}),
+      ...(footerLinkClickable !== undefined ? { footerLinkClickable: Boolean(footerLinkClickable) } : {}),
+      ...(footerLinkUrl !== undefined ? { footerLinkUrl: String(footerLinkUrl).trim() } : {}),
       updatedAt: new Date().toISOString(),
     };
 
@@ -2252,7 +2919,7 @@ app.delete('/api/onboarding-forms/:id', (req, res) => {
 });
 
 // ⚡ GERAR CARTÃO INSTANTÂNEO COM 1-CLIQUE A PARTIR DO FORMULÁRIO DO CLIENTE
-app.post('/api/onboarding-forms/:id/convert-to-card', (req, res) => {
+app.post('/api/onboarding-forms/:id/convert-to-card', async (req, res) => {
   try {
     const { id } = req.params;
     const forms = getOnboardingForms();
@@ -2346,7 +3013,7 @@ app.post('/api/onboarding-forms/:id/convert-to-card', (req, res) => {
         break;
     }
 
-    const newCard = {
+    let newCard: any = {
       id: Date.now(),
       userId: 1,
       slug,
@@ -2436,6 +3103,18 @@ app.post('/api/onboarding-forms/:id/convert-to-card', (req, res) => {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
+
+    if (supabaseAdmin) {
+      try {
+        const dbPayload = mapCardToDbServer(newCard);
+        const { data, error } = await supabaseAdmin.from('digital_cards').insert(dbPayload).select().single();
+        if (!error && data) {
+          newCard = mapDbToCardServer(data);
+        }
+      } catch (e) {
+        console.warn('Erro ao salvar cartão convertido do formulário no Supabase:', e);
+      }
+    }
 
     cards.push(newCard);
     writeJson(CARDS_FILE, cards);

@@ -1,0 +1,16 @@
+{
+  "requireMasterApproval": false,
+  "defaultRole": "cliente",
+  "defaultPlan": "degustacao",
+  "degustacaoDays": 30,
+  "allowPublicRegistration": true,
+  "masterWhatsApp": "+55 (15) 99625-9353",
+  "customWelcomeMessage": "",
+  "platformLogoUrl": "/logo-atomos.svg",
+  "platformTitle": "Átomos Infinity",
+  "chatbotEnabled": true,
+  "chatbotScriptUrl": "https://cdn.jotfor.ms/agent/embedjs/01a0bfa1d8107000848905e7ba8cb2c582a4/embed.js",
+  "chatbotEmbedCode": "<script src='https://cdn.jotfor.ms/agent/embedjs/01a0bfa1d8107000848905e7ba8cb2c582a4/embed.js'></script>",
+  "chatbotPages": "all",
+  "updatedAt": "2026-09-20T21:50:00.000Z"
+}

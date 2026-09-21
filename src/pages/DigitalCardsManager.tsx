@@ -57,6 +57,8 @@ import {
   BellRing,
   FileText,
   Clock,
+  Maximize2,
+  ArrowDown,
 } from 'lucide-react';
 import { DigitalCard, CardMetrics, DigitalCardInquiry } from '../types.ts';
 import { PRESET_THEMES, VISUAL_PRESETS, EFFECT_PRESETS } from '../../shared/digital-card-appearance.ts';
@@ -238,6 +240,20 @@ export const DigitalCardsManager: React.FC = () => {
         cardsData = await safeApiCall('/api/cards', undefined, []);
       }
 
+      // Sincroniza e mescla sempre com a API local para garantir que cartões salvos na plataforma (como Stephanie Pazini) apareçam
+      try {
+        const localCards: DigitalCard[] = await safeApiCall('/api/cards', undefined, []);
+        if (localCards && Array.isArray(localCards) && localCards.length > 0) {
+          const existingSlugs = new Set(cardsData.map((c) => c.slug));
+          for (const lc of localCards) {
+            if (!existingSlugs.has(lc.slug)) {
+              cardsData.push(lc);
+              existingSlugs.add(lc.slug);
+            }
+          }
+        }
+      } catch (e) {}
+
       setCards(cardsData);
       if (cardsData.length > 0 && !editingCard) {
         setEditingCard(cardsData[0]);
@@ -285,7 +301,36 @@ export const DigitalCardsManager: React.FC = () => {
     loadCardDetails(c.id);
   };
 
+  const handleSaveLandingTemplateAsCard = async () => {
+    if (!editingCard) return;
+    try {
+      setSaving(true);
+      setErrorMessage(null);
+      const res = await fetch('/api/settings/landing-card/save-as-card', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editingCard),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.card) {
+          setCards((prev) => [data.card, ...prev.filter((c) => c.slug !== data.card.slug)]);
+          setLandingTemplateSuccessMessage(`O cartão de "${data.card.name}" foi guardado com sucesso em Todos os Cartões da Plataforma!`);
+          setTimeout(() => setLandingTemplateSuccessMessage(null), 6000);
+        }
+      } else {
+        const err = await res.json();
+        throw new Error(err.error || 'Erro ao guardar cópia em Todos os Cartões');
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Erro ao guardar cópia do cartão');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleNewCard = () => {
+    setIsEditingLandingTemplate(false);
     const newTemplate: Partial<DigitalCard> = {
       name: '',
       slug: '',
@@ -335,6 +380,7 @@ export const DigitalCardsManager: React.FC = () => {
       contentBackgroundImageFocusX: 50,
       contentBackgroundImageFocusY: 50,
       contentBackgroundImageOpacity: 100,
+      contentBackgroundPosition: 'card_full',
       qrCodeStyle: 'quadrado',
       qrCodeForegroundColor: '#12375B',
       qrCodeBackgroundColor: '#FFFFFF',
@@ -344,6 +390,8 @@ export const DigitalCardsManager: React.FC = () => {
       ctaLabel: '',
       ctaUrl: '',
       footerText: 'Cartão digital disponibilizado por Átomos Infinity',
+      footerLinkEnabled: true,
+      footerLinkUrl: '',
       inquiryEnabled: true,
       activityTrackingEnabled: true,
     };
@@ -576,29 +624,33 @@ export const DigitalCardsManager: React.FC = () => {
         if (user) {
           const client = await initSupabase();
           if (client) {
-            const dbPayload = mapDigitalCardToDb(editingCard, user.id);
-            const { data, error } = await client
-              .from('digital_cards')
-              .update(dbPayload)
-              .eq('id', editingCard.id)
-              .select()
-              .single();
-            if (!error && data) {
-              updated = mapDbToDigitalCard(data);
+            const numericId = Number(editingCard.id);
+            if (!isNaN(numericId) && numericId > 0) {
+              const dbPayload = mapDigitalCardToDb(editingCard, user.id);
+              const { data, error } = await client
+                .from('digital_cards')
+                .update(dbPayload)
+                .eq('id', numericId)
+                .select()
+                .single();
+              if (!error && data) {
+                updated = mapDbToDigitalCard(data);
+              }
             }
           }
         }
 
-        if (!updated) {
+        // Sincroniza também com o servidor Express para manter o espelho cards.json e emitir SSE
+        try {
           const res = await fetch(`/api/cards/${editingCard.id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(editingCard),
+            body: JSON.stringify(updated || editingCard),
           });
-          if (res.ok) {
+          if (res.ok && !updated) {
             updated = await res.json();
           }
-        }
+        } catch (e) {}
 
         if (updated) {
           broadcastCardUpdate(updated);
@@ -614,43 +666,90 @@ export const DigitalCardsManager: React.FC = () => {
     e.preventDefault();
 
     // Identifica o cartão correto para transmissão prévia
-    const targetCard = (editingCard && editingCard.slug === slug)
+    const rawTarget = (editingCard && editingCard.slug === slug)
       ? editingCard
       : (cards.find((c) => c.slug === slug) || editingCard);
 
-    if (targetCard) {
-      broadcastCardUpdate(targetCard);
-    }
+    if (!rawTarget) return;
 
-    if (editingCard && editingCard.slug === slug && !isNew && editingCard.id) {
-      try {
+    const targetCard: DigitalCard = {
+      ...rawTarget,
+      instagramUrl: normalizeSocialUrl(rawTarget.instagramUrl),
+      linkedinUrl: normalizeSocialUrl(rawTarget.linkedinUrl),
+      facebookUrl: normalizeSocialUrl(rawTarget.facebookUrl),
+      youtubeUrl: normalizeSocialUrl(rawTarget.youtubeUrl),
+      websiteUrl: normalizeSocialUrl(rawTarget.websiteUrl),
+      ctaUrl: normalizeSocialUrl(rawTarget.ctaUrl),
+      googleMapsUrl: normalizeSocialUrl(rawTarget.googleMapsUrl),
+      googleReviewUrl: normalizeSocialUrl(rawTarget.googleReviewUrl),
+      updatedAt: new Date().toISOString(),
+    };
+
+    // Transmite imediatamente para qualquer aba aberta ou recém-criada
+    broadcastCardUpdate(targetCard);
+    try {
+      localStorage.setItem('digital_card_synced', JSON.stringify({
+        slug: targetCard.slug,
+        timestamp: Date.now(),
+        card: targetCard,
+      }));
+    } catch (e) {}
+
+    // Sincroniza e salva no backend antes da navegação
+    try {
+      if (isEditingLandingTemplate) {
+        try {
+          localStorage.setItem('atomos_landing_card', JSON.stringify(targetCard));
+        } catch (e) {}
+        await safeApiMutate('/api/settings/landing-card', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(targetCard),
+        });
+      } else if (targetCard.id) {
         if (user) {
-          const client = await initSupabase();
-          if (client && typeof editingCard.id === 'number') {
-            const dbPayload = mapDigitalCardToDb(editingCard, user.id);
-            await client.from('digital_cards').update(dbPayload).eq('id', editingCard.id);
+          try {
+            const client = await initSupabase();
+            const numericId = Number(targetCard.id);
+            if (client && !isNaN(numericId) && numericId > 0) {
+              const dbPayload = mapDigitalCardToDb(targetCard, user.id);
+              await client.from('digital_cards').update(dbPayload).eq('id', numericId);
+            }
+          } catch (sbErr) {
+            console.warn('Erro ao sincronizar com Supabase antes de abrir:', sbErr);
           }
-        } else {
-          const res = await fetch(`/api/cards/${editingCard.id}`, {
+        }
+
+        // Salva também no servidor local para consistência imediata
+        try {
+          const res = await fetch(`/api/cards/${targetCard.id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(editingCard),
+            body: JSON.stringify(targetCard),
           });
           if (res.ok) {
             const updated = await res.json();
             broadcastCardUpdate(updated);
           }
+        } catch (apiErr) {
+          console.warn('Erro ao salvar na API local antes de abrir:', apiErr);
         }
-      } catch (err) {
-        console.warn('Auto-save antes de abrir concluído com fallback:', err);
       }
+    } catch (err) {
+      console.warn('Auto-save antes de abrir concluído com fallback:', err);
     }
 
-    const targetName = `digital_card_public_${slug.replace(/[^a-zA-Z0-9_]/g, '_')}`;
-    const win = window.open(`/cartao/${slug}?_t=${Date.now()}`, targetName);
+    // Abre a nova aba garantindo timestamp exclusivo para não usar cache estático do navegador
+    const targetUrl = `/cartao/${encodeURIComponent(slug)}?_t=${Date.now()}`;
+    const win = window.open(targetUrl, '_blank');
     if (win && !win.closed) {
       try {
         win.focus();
+        setTimeout(() => {
+          try {
+            win.postMessage({ type: 'CARD_UPDATED', slug, card: targetCard, timestamp: Date.now() }, '*');
+          } catch (_) {}
+        }, 350);
       } catch (e) {}
     }
   };
@@ -663,6 +762,20 @@ export const DigitalCardsManager: React.FC = () => {
     // Se estiver editando o modelo da landing page, usa o reset oficial de fábrica
     if (isEditingLandingTemplate) {
       try {
+        // Se o cartão atual foi personalizado (ex: Stephanie Pazini), preserva cópia em Todos os Cartões antes do reset de fábrica
+        if (editingCard && editingCard.name && editingCard.name.trim() !== 'Jurandir Hora') {
+          try {
+            await fetch('/api/settings/landing-card/save-as-card', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(editingCard),
+            });
+            await fetchCards();
+          } catch (preserveErr) {
+            console.warn('Aviso: Falha na auto-preservação do cartão:', preserveErr);
+          }
+        }
+
         const result = await safeApiMutate('/api/settings/landing-card/reset', { method: 'POST' });
         const defaultTemplate = result.success && result.data?.template ? result.data.template : {
           name: 'Jurandir Hora',
@@ -675,11 +788,12 @@ export const DigitalCardsManager: React.FC = () => {
         };
         setEditingCard(defaultTemplate);
         setSaveSuccess(true);
-        setLandingTemplateSuccessMessage('Modelo padrão da Landing Page restaurado para as configurações de fábrica!');
+        setLandingTemplateSuccessMessage('Modelo padrão da Landing Page restaurado para as configurações de fábrica! Seus dados personalizados foram preservados com sucesso em Todos os Cartões.');
         broadcastCardUpdate(defaultTemplate);
         try {
           localStorage.setItem('atomos_landing_card', JSON.stringify(defaultTemplate));
         } catch (e) {}
+        await fetchCards();
         setTimeout(() => setLandingTemplateSuccessMessage(null), 6000);
       } catch (err: any) {
         console.error('Erro ao restaurar modelo da landing page:', err);
@@ -755,6 +869,7 @@ export const DigitalCardsManager: React.FC = () => {
       contentBackgroundImageFocusY: 50,
       contentBackgroundImageOpacity: 100,
       contentBackgroundImageScale: 100,
+      contentBackgroundPosition: 'card_full',
 
       // Primeiro contato / Formulário Enviar uma mensagem
       inquiryEnabled: true,
@@ -795,6 +910,22 @@ export const DigitalCardsManager: React.FC = () => {
     }
   };
 
+  const normalizeSocialUrl = (url?: string): string => {
+    if (!url) return '';
+    let trimmed = url.trim();
+    if (!trimmed) return '';
+    if (trimmed.startsWith('data:') || trimmed.startsWith('<') || trimmed.startsWith('javascript:')) {
+      return trimmed;
+    }
+    if (trimmed.startsWith(':')) {
+      trimmed = trimmed.replace(/^:+/, '').trim();
+    }
+    if (/^https?:\/\//i.test(trimmed)) {
+      return trimmed;
+    }
+    return `https://${trimmed}`;
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingCard) return;
@@ -803,22 +934,34 @@ export const DigitalCardsManager: React.FC = () => {
     setErrorMessage(null);
     setSaveSuccess(false);
 
+    const cardToSave: DigitalCard = {
+      ...editingCard,
+      instagramUrl: normalizeSocialUrl(editingCard.instagramUrl),
+      linkedinUrl: normalizeSocialUrl(editingCard.linkedinUrl),
+      facebookUrl: normalizeSocialUrl(editingCard.facebookUrl),
+      youtubeUrl: normalizeSocialUrl(editingCard.youtubeUrl),
+      websiteUrl: normalizeSocialUrl(editingCard.websiteUrl),
+      ctaUrl: normalizeSocialUrl(editingCard.ctaUrl),
+      googleMapsUrl: normalizeSocialUrl(editingCard.googleMapsUrl),
+      googleReviewUrl: normalizeSocialUrl(editingCard.googleReviewUrl),
+    };
+
     try {
       // Se estiver no modo de edição do modelo da Landing Page
       if (isEditingLandingTemplate) {
         try {
-          localStorage.setItem('atomos_landing_card', JSON.stringify(editingCard));
+          localStorage.setItem('atomos_landing_card', JSON.stringify(cardToSave));
         } catch (e) {}
 
         const result = await safeApiMutate('/api/settings/landing-card', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(editingCard),
+          body: JSON.stringify(cardToSave),
         });
 
         setSaveSuccess(true);
         setLandingTemplateSuccessMessage('Modelo padrão da Landing Page salvo e publicado com sucesso!');
-        const updatedTemplate = result.success && result.data?.template ? result.data.template : editingCard;
+        const updatedTemplate = result.success && result.data?.template ? result.data.template : cardToSave;
         if (updatedTemplate) {
           setEditingCard(updatedTemplate);
         }
@@ -827,44 +970,60 @@ export const DigitalCardsManager: React.FC = () => {
         return;
       }
 
-      let savedCard: DigitalCard;
+      let savedCard: DigitalCard | null = null;
 
       if (user) {
         const client = await initSupabase();
-        if (!client) throw new Error('Supabase não inicializado.');
+        if (client) {
+          const dbPayload = mapDigitalCardToDb(cardToSave, user.id);
+          const isStringTempId = typeof (cardToSave.id as any) === 'string' && (String(cardToSave.id).startsWith('card-') || isNaN(Number(cardToSave.id)));
 
-        const dbPayload = mapDigitalCardToDb(editingCard, user.id);
+          let supaError: any = null;
+          let supaData: any = null;
 
-        const isStringTempId = typeof editingCard.id === 'string' && (editingCard.id.startsWith('card-') || isNaN(Number(editingCard.id)));
+          if (isNew || !cardToSave.id || isStringTempId) {
+            const res = await client
+              .from('digital_cards')
+              .insert([dbPayload])
+              .select()
+              .single();
+            supaError = res.error;
+            supaData = res.data;
+          } else {
+            const numericId = Number(cardToSave.id);
+            const res = await client
+              .from('digital_cards')
+              .update(dbPayload)
+              .eq('id', numericId)
+              .select()
+              .single();
+            supaError = res.error;
+            supaData = res.data;
+          }
 
-        if (isNew || !editingCard.id || isStringTempId) {
-          const { data, error } = await client
-            .from('digital_cards')
-            .insert([dbPayload])
-            .select()
-            .single();
-          if (error) throw error;
-          savedCard = mapDbToDigitalCard(data);
-        } else {
-          const numericId = Number(editingCard.id);
-          const { data, error } = await client
-            .from('digital_cards')
-            .update(dbPayload)
-            .eq('id', numericId)
-            .select()
-            .single();
-          if (error) throw error;
-          savedCard = mapDbToDigitalCard(data);
+          if (!supaError && supaData) {
+            savedCard = mapDbToDigitalCard(supaData);
+            // Sincroniza com a API local em background
+            fetch(`/api/cards/${savedCard.id || ''}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(savedCard),
+            }).catch(() => {});
+          } else if (supaError) {
+            console.warn('Supabase save error, executando fallback local:', supaError);
+          }
         }
-      } else {
+      }
+
+      if (!savedCard) {
         // Fallback local API
-        const url = isNew ? '/api/cards' : `/api/cards/${editingCard.id}`;
+        const url = isNew ? '/api/cards' : `/api/cards/${cardToSave.id}`;
         const method = isNew ? 'POST' : 'PUT';
 
         const res = await fetch(url, {
           method,
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(editingCard),
+          body: JSON.stringify(cardToSave),
         });
 
         const json = await res.json();
@@ -1568,6 +1727,19 @@ export const DigitalCardsManager: React.FC = () => {
                     </button>
                   )}
 
+                  {isEditingLandingTemplate && (
+                    <button
+                      type="button"
+                      onClick={handleSaveLandingTemplateAsCard}
+                      disabled={saving}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border border-purple-200 dark:border-purple-800 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/40 dark:hover:bg-purple-900/60 text-purple-700 dark:text-purple-300 transition-all cursor-pointer shadow-xs"
+                      title="Salvar uma cópia independente deste modelo em Todos os Cartões da Plataforma"
+                    >
+                      <Plus size={13} className="text-purple-600 dark:text-purple-400" />
+                      <span>Salvar em Meus Cartões</span>
+                    </button>
+                  )}
+
                   <button
                     type="button"
                     onClick={() => setShowWallpapersModal(true)}
@@ -1621,7 +1793,17 @@ export const DigitalCardsManager: React.FC = () => {
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                  <div className="flex items-center gap-2 self-end sm:self-center shrink-0 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={handleSaveLandingTemplateAsCard}
+                      disabled={saving}
+                      className="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold border border-purple-400/40 transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
+                      title="Salvar uma cópia independente deste modelo em Todos os Cartões da Plataforma"
+                    >
+                      <Plus size={13} />
+                      <span>Salvar em Meus Cartões</span>
+                    </button>
                     <a
                       href="/"
                       target="_blank"
@@ -1664,7 +1846,7 @@ export const DigitalCardsManager: React.FC = () => {
               )}
 
               {activeTab === 'editor' && (
-                <form onSubmit={handleSave} className="space-y-3">
+                <form onSubmit={handleSave} noValidate className="space-y-3">
                   {/* ACORDEÃO 1: IDENTIDADE */}
                   <div className="border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden">
                     <button
@@ -1847,7 +2029,7 @@ export const DigitalCardsManager: React.FC = () => {
                               </div>
                             </div>
                             <input
-                              type="url"
+                              type="text"
                               value={editingCard.imageUrl || ''}
                               onChange={(e) => setEditingCard({ ...editingCard, imageUrl: e.target.value })}
                               placeholder="URL da foto (https://...)"
@@ -1969,7 +2151,7 @@ export const DigitalCardsManager: React.FC = () => {
                               </div>
                             </div>
                             <input
-                              type="url"
+                              type="text"
                               value={editingCard.companyLogoUrl || ''}
                               onChange={(e) => setEditingCard({ ...editingCard, companyLogoUrl: e.target.value })}
                               placeholder="URL da logo da empresa (https://...)"
@@ -2246,7 +2428,7 @@ export const DigitalCardsManager: React.FC = () => {
                                 </div>
                               </div>
                               <input
-                                type="url"
+                                type="text"
                                 value={editingCard.mobileIconUrl || ''}
                                 onChange={(e) => setEditingCard({ ...editingCard, mobileIconUrl: e.target.value })}
                                 placeholder={
@@ -2369,7 +2551,7 @@ export const DigitalCardsManager: React.FC = () => {
                           <div>
                             <label className="block text-[11px] font-bold text-slate-600 mb-1">Website Oficial</label>
                             <input
-                              type="url"
+                              type="text"
                               value={editingCard.websiteUrl || ''}
                               onChange={(e) => setEditingCard({ ...editingCard, websiteUrl: e.target.value })}
                               placeholder="https://consultatomosinfinity.com.br"
@@ -2682,7 +2864,7 @@ export const DigitalCardsManager: React.FC = () => {
 
                           <div className="relative">
                             <input
-                              type="url"
+                              type="text"
                               value={editingCard.googleMapsUrl || ''}
                               onChange={(e) => setEditingCard({ ...editingCard, googleMapsUrl: e.target.value })}
                               placeholder="https://maps.app.goo.gl/... ou https://maps.google.com/?cid=..."
@@ -2770,7 +2952,7 @@ export const DigitalCardsManager: React.FC = () => {
 
                           <div className="relative">
                             <input
-                              type="url"
+                              type="text"
                               value={editingCard.googleReviewUrl || ''}
                               onChange={(e) => setEditingCard({ ...editingCard, googleReviewUrl: e.target.value })}
                               placeholder="Ex: https://g.page/r/.../review ou https://search.google.com/local/writereview?placeid=..."
@@ -3499,7 +3681,7 @@ export const DigitalCardsManager: React.FC = () => {
                                   </div>
                                 </div>
                                 <input
-                                  type="url"
+                                  type="text"
                                   placeholder="https://exemplo.com/fundo.jpg"
                                   value={editingCard.contentBackgroundImageUrl || ''}
                                   onChange={(e) =>
@@ -3535,6 +3717,74 @@ export const DigitalCardsManager: React.FC = () => {
                           {/* Quando uma imagem estiver definida: Ajuste do Ponto de Foco e Opacidade da Imagem */}
                           {editingCard.contentBackgroundImageUrl && (
                             <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-3.5">
+                              {/* Onde a Imagem de Fundo deve começar? (Cartão Inteiro vs Abaixo do Header) */}
+                              <div className="pb-3 border-b border-slate-200">
+                                <label className="block text-[11px] font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                                  <Layers size={13} className="text-sky-600" />
+                                  <span>Onde a Imagem de Fundo deve começar?</span>
+                                </label>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setEditingCard({
+                                        ...editingCard,
+                                        contentBackgroundPosition: 'card_full',
+                                        appearanceTheme: 'personalizado',
+                                      })
+                                    }
+                                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-start gap-2.5 ${
+                                      editingCard.contentBackgroundPosition !== 'below_header'
+                                        ? 'bg-sky-50 border-sky-500 ring-2 ring-sky-500/20 text-sky-950'
+                                        : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
+                                    }`}
+                                  >
+                                    <div className={`p-1.5 rounded-lg shrink-0 mt-0.5 ${
+                                      editingCard.contentBackgroundPosition !== 'below_header' ? 'bg-sky-500 text-white' : 'bg-slate-100 text-slate-500'
+                                    }`}>
+                                      <Maximize2 size={15} />
+                                    </div>
+                                    <div>
+                                      <span className="text-xs font-bold block">Cartão Inteiro (Do Topo)</span>
+                                      <span className="text-[10px] opacity-80 block mt-0.5 leading-tight">
+                                        Cobre todo o cartão por trás, desde o topo do cabeçalho até o rodapé.
+                                      </span>
+                                    </div>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setEditingCard({
+                                        ...editingCard,
+                                        contentBackgroundPosition: 'below_header',
+                                        appearanceTheme: 'personalizado',
+                                      })
+                                    }
+                                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-start gap-2.5 ${
+                                      editingCard.contentBackgroundPosition === 'below_header'
+                                        ? 'bg-sky-50 border-sky-500 ring-2 ring-sky-500/20 text-sky-950'
+                                        : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
+                                    }`}
+                                  >
+                                    <div className={`p-1.5 rounded-lg shrink-0 mt-0.5 ${
+                                      editingCard.contentBackgroundPosition === 'below_header' ? 'bg-sky-500 text-white' : 'bg-slate-100 text-slate-500'
+                                    }`}>
+                                      <ArrowDown size={15} />
+                                    </div>
+                                    <div>
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="text-xs font-bold block">Abaixo do Header</span>
+                                        <span className="px-1.5 py-0.2 text-[9px] bg-emerald-100 text-emerald-700 rounded-full font-bold">Novo</span>
+                                      </div>
+                                      <span className="text-[10px] opacity-80 block mt-0.5 leading-tight">
+                                        Começa abaixo da foto e títulos, cobrindo apenas os botões e conteúdo.
+                                      </span>
+                                    </div>
+                                  </button>
+                                </div>
+                              </div>
+
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
                                   <Crosshair size={14} className="text-sky-600" />
@@ -4857,7 +5107,7 @@ export const DigitalCardsManager: React.FC = () => {
                                       </div>
                                     </div>
                                     <input
-                                      type="url"
+                                      type="text"
                                       value={editingCard.qrCodeLogoUrl || ''}
                                       onChange={(e) => setEditingCard({ ...editingCard, qrCodeLogoUrl: e.target.value })}
                                       placeholder="https://exemplo.com/logo-icone.png (deixe vazio para usar o logo da empresa)"
@@ -4987,7 +5237,7 @@ export const DigitalCardsManager: React.FC = () => {
                             <div>
                               <label className="block text-[11px] font-bold text-slate-600 mb-1">Instagram URL</label>
                               <input
-                                type="url"
+                                type="text"
                                 value={editingCard.instagramUrl || ''}
                                 onChange={(e) => setEditingCard({ ...editingCard, instagramUrl: e.target.value })}
                                 placeholder="https://instagram.com/..."
@@ -4997,7 +5247,7 @@ export const DigitalCardsManager: React.FC = () => {
                             <div>
                               <label className="block text-[11px] font-bold text-slate-600 mb-1">LinkedIn URL</label>
                               <input
-                                type="url"
+                                type="text"
                                 value={editingCard.linkedinUrl || ''}
                                 onChange={(e) => setEditingCard({ ...editingCard, linkedinUrl: e.target.value })}
                                 placeholder="https://linkedin.com/in/..."
@@ -5007,7 +5257,7 @@ export const DigitalCardsManager: React.FC = () => {
                             <div>
                               <label className="block text-[11px] font-bold text-slate-600 mb-1">Facebook URL</label>
                               <input
-                                type="url"
+                                type="text"
                                 value={editingCard.facebookUrl || ''}
                                 onChange={(e) => setEditingCard({ ...editingCard, facebookUrl: e.target.value })}
                                 placeholder="https://facebook.com/..."
@@ -5017,7 +5267,7 @@ export const DigitalCardsManager: React.FC = () => {
                             <div>
                               <label className="block text-[11px] font-bold text-slate-600 mb-1">YouTube URL</label>
                               <input
-                                type="url"
+                                type="text"
                                 value={editingCard.youtubeUrl || ''}
                                 onChange={(e) => setEditingCard({ ...editingCard, youtubeUrl: e.target.value })}
                                 placeholder="https://youtube.com/@..."
@@ -5042,7 +5292,7 @@ export const DigitalCardsManager: React.FC = () => {
                           <div>
                             <label className="block text-[11px] font-bold text-slate-600 mb-1">Link do CTA</label>
                             <input
-                              type="url"
+                              type="text"
                               value={editingCard.ctaUrl || ''}
                               onChange={(e) => setEditingCard({ ...editingCard, ctaUrl: e.target.value })}
                               placeholder="https://consultatomosinfinity.com.br"
@@ -5051,15 +5301,50 @@ export const DigitalCardsManager: React.FC = () => {
                           </div>
                         </div>
 
-                        <div>
-                          <label className="block text-[11px] font-bold text-slate-600 mb-1">Texto do Rodapé</label>
-                          <input
-                            type="text"
-                            value={editingCard.footerText || ''}
-                            onChange={(e) => setEditingCard({ ...editingCard, footerText: e.target.value })}
-                            placeholder="Cartão digital disponibilizado por Átomos Infinity"
-                            className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500"
-                          />
+                        <div className="space-y-3 p-3.5 rounded-xl bg-slate-50/80 border border-slate-200">
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-700 mb-1">Texto do Rodapé</label>
+                            <input
+                              type="text"
+                              value={editingCard.footerText || ''}
+                              onChange={(e) => setEditingCard({ ...editingCard, footerText: e.target.value })}
+                              placeholder="Cartão digital disponibilizado por Átomos Infinity"
+                              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white"
+                            />
+                          </div>
+
+                          {/* Configuração de Rodapé Clicável */}
+                          <div className="pt-2 border-t border-slate-200/70 space-y-2.5">
+                            <label className="flex items-center gap-2 cursor-pointer select-none">
+                              <input
+                                type="checkbox"
+                                checked={editingCard.footerLinkEnabled !== false}
+                                onChange={(e) => setEditingCard({ ...editingCard, footerLinkEnabled: e.target.checked })}
+                                className="w-4 h-4 rounded text-sky-600 focus:ring-sky-500 cursor-pointer"
+                              />
+                              <span className="text-xs font-semibold text-slate-700">
+                                Tornar o texto do rodapé clicável
+                              </span>
+                            </label>
+
+                            {editingCard.footerLinkEnabled !== false && (
+                              <div className="space-y-1 pl-6">
+                                <label className="block text-[11px] font-medium text-slate-600">
+                                  Link de Redirecionamento Personalizado (Opcional)
+                                </label>
+                                <input
+                                  type="text"
+                                  value={editingCard.footerLinkUrl || ''}
+                                  onChange={(e) => setEditingCard({ ...editingCard, footerLinkUrl: e.target.value })}
+                                  placeholder="https://... (deixe em branco para usar o link padrão do site Átomos Infinity)"
+                                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white"
+                                />
+                                <p className="text-[10px] text-slate-400">
+                                  Se não for preenchido, o clique levará ao link oficial configurado pelo Master da plataforma.
+                                </p>
+                              </div>
+                            )}
+                          </div>
                         </div>
 
                         {/* SEÇÃO OBRIGATÓRIA: ATENDENTE VIRTUAL PRÓPRIO */}
@@ -5822,10 +6107,14 @@ export const DigitalCardsManager: React.FC = () => {
                   </div>
                   <div>
                     <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
-                      Restaurar Cartão para o Padrão?
+                      {isEditingLandingTemplate
+                        ? 'Restaurar Modelo da Landing Page para Fábrica?'
+                        : 'Restaurar Cartão para o Padrão?'}
                     </h3>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Voltar ao estado original sem imagens e com a estrutura básica.
+                      {isEditingLandingTemplate
+                        ? 'Voltar a demonstração da página inicial para o modelo oficial (Jurandir Hora).'
+                        : 'Voltar ao estado original sem imagens e com a estrutura básica.'}
                     </p>
                   </div>
                 </div>
@@ -5838,29 +6127,49 @@ export const DigitalCardsManager: React.FC = () => {
                 </button>
               </div>
 
-              <div className="space-y-3 text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 mb-6">
-                <p className="font-semibold text-slate-800 dark:text-slate-100">
-                  Ao confirmar, esta ação executará as seguintes alterações visuais:
-                </p>
-                <ul className="list-disc pl-4 space-y-1 text-slate-600 dark:text-slate-300">
-                  <li>
-                    <strong>Removerá todas as imagens:</strong> foto de perfil, logotipo da empresa, imagem de fundo e ícone do celular.
-                  </li>
-                  <li>
-                    <strong>Estrutura básica original:</strong> restaurará a paleta padrão (#12375B / #1A7FBE / #FFFFFF) e as opacidades clássicas.
-                  </li>
-                  <li>
-                    <strong>Botões de ação:</strong> restaurará o arredondamento de 16px e as cores originais dos 4 botões.
-                  </li>
-                  <li>
-                    <strong>QR Code e Moldura:</strong> restaurará o formato arredondado sem logo interna e a escala de 97%.
-                  </li>
-                </ul>
-                <div className="pt-2 border-t border-slate-200 dark:border-slate-700 flex items-center gap-2 text-emerald-700 dark:text-emerald-400 font-semibold">
-                  <CheckCircle2 size={15} className="shrink-0 text-emerald-600 dark:text-emerald-400" />
-                  <span>Seus dados cadastrais (nome, cargo, telefone, e-mail, WhatsApp e links) serão PRESERVADOS intactos.</span>
+              {isEditingLandingTemplate ? (
+                <div className="space-y-3 text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 mb-6">
+                  <p className="font-semibold text-slate-800 dark:text-slate-100">
+                    O que acontecerá ao confirmar a restauração de fábrica da Landing Page:
+                  </p>
+                  <ul className="list-disc pl-4 space-y-1.5 text-slate-600 dark:text-slate-300">
+                    <li>
+                      <strong>Landing Page Restaurada:</strong> O modelo que aparece na página inicial pública voltará ao modelo oficial de demonstração original (Jurandir Hora).
+                    </li>
+                    <li>
+                      <strong>Proteção e Cópia Automática:</strong> Se você personalizou este modelo para um cliente (ex: Stephanie Pazini), o sistema criará <strong>automaticamente uma cópia segura em &quot;Todos os Cartões da Plataforma&quot;</strong>, mantendo todas as fotos, logotipo, cores e links intactos.
+                    </li>
+                  </ul>
+                  <div className="pt-2 border-t border-slate-200 dark:border-slate-700 flex items-center gap-2 text-purple-700 dark:text-purple-400 font-semibold">
+                    <CheckCircle2 size={15} className="shrink-0 text-purple-600 dark:text-purple-400" />
+                    <span>Nenhum dado do seu cliente será perdido; ele continuará disponível na sua lista de cartões.</span>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="space-y-3 text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 mb-6">
+                  <p className="font-semibold text-slate-800 dark:text-slate-100">
+                    Ao confirmar, esta ação executará as seguintes alterações visuais:
+                  </p>
+                  <ul className="list-disc pl-4 space-y-1 text-slate-600 dark:text-slate-300">
+                    <li>
+                      <strong>Removerá todas as imagens:</strong> foto de perfil, logotipo da empresa, imagem de fundo e ícone do celular.
+                    </li>
+                    <li>
+                      <strong>Estrutura básica original:</strong> restaurará a paleta padrão (#12375B / #1A7FBE / #FFFFFF) e as opacidades clássicas.
+                    </li>
+                    <li>
+                      <strong>Botões de ação:</strong> restaurará o arredondamento de 16px e as cores originais dos 4 botões.
+                    </li>
+                    <li>
+                      <strong>QR Code e Moldura:</strong> restaurará o formato arredondado sem logo interna e a escala de 97%.
+                    </li>
+                  </ul>
+                  <div className="pt-2 border-t border-slate-200 dark:border-slate-700 flex items-center gap-2 text-emerald-700 dark:text-emerald-400 font-semibold">
+                    <CheckCircle2 size={15} className="shrink-0 text-emerald-600 dark:text-emerald-400" />
+                    <span>Seus dados cadastrais (nome, cargo, telefone, e-mail, WhatsApp e links) serão PRESERVADOS intactos.</span>
+                  </div>
+                </div>
+              )}
 
               <div className="flex items-center justify-end gap-2.5">
                 <button

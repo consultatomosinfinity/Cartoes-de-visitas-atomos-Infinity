@@ -78,6 +78,15 @@ const getGoogleReviewDirectUrl = (cardData: DigitalCard): string => {
   return '#';
 };
 
+const getFooterTargetUrl = (url?: string | null): string => {
+  if (!url) return 'https://consultatomosinfinity.com.br';
+  const trimmed = url.trim();
+  if (!trimmed) return 'https://consultatomosinfinity.com.br';
+  if (trimmed.startsWith('/')) return trimmed;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed}`;
+};
+
 const getInstagramDirectUrl = (url?: string | null): string => {
   if (!url) return '#';
   let trimmed = url.trim();
@@ -122,8 +131,36 @@ interface DigitalCardPublicProps {
 }
 
 export const DigitalCardPublic: React.FC<DigitalCardPublicProps> = ({ slug }) => {
-  const [card, setCard] = useState<DigitalCard | null>(null);
-  const [status, setStatus] = useState<'loading' | 'ativo' | 'pausado' | 'error'>('loading');
+  // Inicialização imediata com dados pré-sincronizados do editor para auto-ajuste instantâneo (<1ms)
+  const getInitialSyncedCard = (): DigitalCard | null => {
+    try {
+      const syncedRaw = localStorage.getItem('digital_card_synced');
+      if (syncedRaw) {
+        const synced = JSON.parse(syncedRaw);
+        if (synced?.slug === slug && synced?.card) {
+          return synced.card;
+        }
+      }
+      const raw = localStorage.getItem('atomos_digital_cards');
+      if (raw) {
+        const list = JSON.parse(raw);
+        const found = list.find((c: any) => c.slug === slug);
+        if (found) return found;
+      }
+      const landingRaw = localStorage.getItem('atomos_landing_card');
+      if (landingRaw) {
+        const landing = JSON.parse(landingRaw);
+        if (landing?.slug === slug) return landing;
+      }
+    } catch {}
+    return null;
+  };
+
+  const initialSynced = getInitialSyncedCard();
+  const [card, setCard] = useState<DigitalCard | null>(initialSynced);
+  const [status, setStatus] = useState<'loading' | 'ativo' | 'pausado' | 'error'>(
+    initialSynced ? (initialSynced.status === 'ativo' ? 'ativo' : 'pausado') : 'loading'
+  );
   const [aiAgentModalOpen, setAiAgentModalOpen] = useState(false);
   const [pixModalOpen, setPixModalOpen] = useState(false);
 
@@ -137,6 +174,30 @@ export const DigitalCardPublic: React.FC<DigitalCardPublicProps> = ({ slug }) =>
   const [inquirySubmitting, setInquirySubmitting] = useState(false);
   const [inquirySuccess, setInquirySuccess] = useState(false);
   const [inquiryError, setInquiryError] = useState<string | null>(null);
+
+  // Configurações globais do sistema (Master)
+  const [systemSettings, setSystemSettings] = useState<{ footerLinkClickable?: boolean; footerLinkUrl?: string } | null>(() => {
+    try {
+      const cached = localStorage.getItem('atomos_system_settings');
+      return cached ? JSON.parse(cached) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  useEffect(() => {
+    fetch('/api/system-settings')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data) {
+          setSystemSettings(data);
+          try {
+            localStorage.setItem('atomos_system_settings', JSON.stringify(data));
+          } catch {}
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Atualiza em tempo real as configurações visuais e meta-informações do cartão
   const applyCardData = (data: DigitalCard | null, newStatus: 'ativo' | 'pausado') => {
@@ -194,7 +255,25 @@ export const DigitalCardPublic: React.FC<DigitalCardPublicProps> = ({ slug }) =>
 
   const loadCard = async (recordEvent = false) => {
     try {
-      // 1. Tenta carregar diretamente do banco Supabase (Suporte para Vercel e produção na nuvem)
+      // 0. Verifica se temos cartão sincronizado recente no localStorage do editor para auto-ajuste imediato
+      let localSyncedCard: DigitalCard | null = null;
+      let localTimestamp = 0;
+      try {
+        const syncedRaw = localStorage.getItem('digital_card_synced');
+        if (syncedRaw) {
+          const synced = JSON.parse(syncedRaw);
+          if (synced?.slug === slug && synced?.card) {
+            localSyncedCard = synced.card;
+            localTimestamp = synced.timestamp || 0;
+          }
+        }
+      } catch {}
+
+      if (localSyncedCard && localSyncedCard.status === 'ativo') {
+        applyCardData(localSyncedCard, 'ativo');
+      }
+
+      // 1. Tenta carregar diretamente do banco Supabase (Fonte Canônica)
       try {
         const client = await initSupabase();
         if (client) {
@@ -231,7 +310,7 @@ export const DigitalCardPublic: React.FC<DigitalCardPublicProps> = ({ slug }) =>
         console.warn('Busca no Supabase não obteve resultado, tentando canais alternativos:', sbErr);
       }
 
-      // 2. Tenta API backend Express (/api/cards/slug/:slug) se disponível
+      // 2. Tenta API backend Express (/api/cards/slug/:slug)
       try {
         const res = await fetch(`/api/cards/slug/${encodeURIComponent(slug)}?_t=${Date.now()}`, {
           cache: 'no-store',
@@ -244,24 +323,26 @@ export const DigitalCardPublic: React.FC<DigitalCardPublicProps> = ({ slug }) =>
           const contentType = res.headers.get('content-type') || '';
           if (contentType.includes('application/json')) {
             const json = await res.json();
-            if (json?.status === 'ativo' && json?.data) {
-              applyCardData(json.data, 'ativo');
+            if (json?.data) {
+              if (json?.status === 'ativo') {
+                applyCardData(json.data, 'ativo');
 
-              if (recordEvent) {
-                const params = new URLSearchParams(window.location.search);
-                const isQr = params.get('src') === 'qr';
-                const eventKind = isQr ? 'qr_open' : 'card_open';
+                if (recordEvent) {
+                  const params = new URLSearchParams(window.location.search);
+                  const isQr = params.get('src') === 'qr';
+                  const eventKind = isQr ? 'qr_open' : 'card_open';
 
-                fetch(`/api/cards/${encodeURIComponent(slug)}/events`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ kind: eventKind }),
-                }).catch(() => {});
+                  fetch(`/api/cards/${encodeURIComponent(slug)}/events`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ kind: eventKind }),
+                  }).catch(() => {});
+                }
+                return;
+              } else if (json?.status === 'pausado') {
+                applyCardData(null, 'pausado');
+                return;
               }
-              return;
-            } else if (json?.status === 'pausado') {
-              applyCardData(null, 'pausado');
-              return;
             }
           }
         }
@@ -371,7 +452,21 @@ export const DigitalCardPublic: React.FC<DigitalCardPublicProps> = ({ slug }) =>
     };
     window.addEventListener('storage', handleStorage);
 
-    // 4. Server-Sent Events (SSE): Atualização remota em tempo real
+    // 4. Message Event: Comunicação direta de janela aberta pelo editor (window.opener / postMessage)
+    const handleWindowMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'CARD_UPDATED' && event.data?.slug === slug) {
+        if (event.data?.card) {
+          if (event.data.card.status === 'ativo') {
+            applyCardData(event.data.card, 'ativo');
+          } else {
+            applyCardData(null, 'pausado');
+          }
+        }
+      }
+    };
+    window.addEventListener('message', handleWindowMessage);
+
+    // 5. Server-Sent Events (SSE): Atualização remota em tempo real
     let eventSource: EventSource | null = null;
     if (typeof EventSource !== 'undefined') {
       try {
@@ -395,7 +490,7 @@ export const DigitalCardPublic: React.FC<DigitalCardPublicProps> = ({ slug }) =>
       }
     }
 
-    // 5. Auto-ajuste imediato ao focar ou alternar para esta aba
+    // 6. Auto-ajuste imediato ao focar ou alternar para esta aba
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         loadCard(false);
@@ -413,6 +508,7 @@ export const DigitalCardPublic: React.FC<DigitalCardPublicProps> = ({ slug }) =>
         broadcastChannel.close();
       }
       window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('message', handleWindowMessage);
       if (eventSource) {
         eventSource.close();
       }
@@ -648,8 +744,8 @@ export const DigitalCardPublic: React.FC<DigitalCardPublicProps> = ({ slug }) =>
           border: isGlass ? glassStyles.border : '1px solid rgba(0,0,0,0.05)',
         }}
       >
-        {/* CAMADA DE IMAGEM DE FUNDO DO CARTÃO (se configurada) */}
-        {card.contentBackgroundImageUrl && (
+        {/* CAMADA DE IMAGEM DE FUNDO DO CARTÃO (se configurada - MODO CARTÃO INTEIRO) */}
+        {card.contentBackgroundImageUrl && card.contentBackgroundPosition !== 'below_header' && (
           <div
             className="absolute inset-0 z-0 pointer-events-none overflow-hidden"
             style={{
@@ -674,7 +770,9 @@ export const DigitalCardPublic: React.FC<DigitalCardPublicProps> = ({ slug }) =>
         <div
           className="relative z-10 w-full flex flex-col flex-1 min-h-full transition-all"
           style={{
-            backgroundColor: isGlass ? glassStyles.cardBg : hexToRgba(card.contentColor || '#FFFFFF', (card.contentOpacity ?? 100) / 100),
+            backgroundColor: card.contentBackgroundPosition === 'below_header'
+              ? 'transparent'
+              : (isGlass ? glassStyles.cardBg : hexToRgba(card.contentColor || '#FFFFFF', (card.contentOpacity ?? 100) / 100)),
           }}
         >
           {/* 1. Header do Cartão com Fundo Colorido e Dual-Porthole */}
@@ -724,6 +822,39 @@ export const DigitalCardPublic: React.FC<DigitalCardPublicProps> = ({ slug }) =>
               </div>
             );
           })()}
+
+        {/* CORPO DO CARTÃO (Abaixo do Header - A partir da linha da seta) */}
+        <div
+          className="relative flex-1 flex flex-col transition-all"
+          style={{
+            backgroundColor: card.contentBackgroundPosition === 'below_header'
+              ? (isGlass ? glassStyles.cardBg : hexToRgba(card.contentColor || '#FFFFFF', (card.contentOpacity ?? 100) / 100))
+              : undefined,
+          }}
+        >
+          {/* CAMADA DE IMAGEM DE FUNDO - MODO ABAIXO DO HEADER */}
+          {card.contentBackgroundImageUrl && card.contentBackgroundPosition === 'below_header' && (
+            <div
+              className="absolute inset-0 z-0 pointer-events-none overflow-hidden"
+              style={{
+                opacity: (card.contentBackgroundImageOpacity ?? 100) / 100,
+              }}
+            >
+              <img
+                src={card.contentBackgroundImageUrl}
+                alt="Fundo do corpo do cartão"
+                referrerPolicy="no-referrer"
+                className="w-full h-full object-contain transition-transform"
+                style={{
+                  objectPosition: `${card.contentBackgroundImageFocusX ?? 50}% ${card.contentBackgroundImageFocusY ?? 50}%`,
+                  transform: `scale(${(card.contentBackgroundImageScale ?? 100) / 100})`,
+                  transformOrigin: `${card.contentBackgroundImageFocusX ?? 50}% ${card.contentBackgroundImageFocusY ?? 50}%`,
+                }}
+              />
+            </div>
+          )}
+
+          <div className="relative z-10 flex-1 flex flex-col">
 
         {/* 4. GRUPO DE BOTÕES DE AÇÃO (Ordem Obrigatória) */}
         {(() => {
@@ -858,7 +989,7 @@ export const DigitalCardPublic: React.FC<DigitalCardPublicProps> = ({ slug }) =>
 
           return (
             <div className="px-5 py-4 flex flex-col gap-2 border-t border-slate-100/50">
-              <h2 className="text-xs font-bold uppercase tracking-wider mb-1 px-1" style={{ color: card.supportTextColor || (contentContrast.isDarkBg ? '#94A3B8' : '#64748B') }}>
+              <h2 className="text-xs font-black uppercase tracking-wider mb-1 px-1" style={{ color: card.supportTextColor || (isNeu ? (isNeuDark ? '#94A3B8' : '#1E293B') : (contentContrast.isDarkBg ? '#94A3B8' : '#334155')) }}>
                 Canais de Comunicação
               </h2>
 
@@ -1111,7 +1242,7 @@ export const DigitalCardPublic: React.FC<DigitalCardPublicProps> = ({ slug }) =>
 
           return (
             <div className="px-6 py-4 border-t border-slate-100/50 text-center">
-              <h2 className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: card.supportTextColor || '#94a3b8' }}>
+              <h2 className="text-xs font-black uppercase tracking-wider mb-3" style={{ color: card.supportTextColor || (isNeu ? (isNeuDark ? '#94A3B8' : '#1E293B') : (contentContrast.isDarkBg ? '#94A3B8' : '#334155')) }}>
                 Redes Profissionais
               </h2>
               <div className="flex items-center justify-center gap-3 flex-wrap">
@@ -1389,9 +1520,10 @@ export const DigitalCardPublic: React.FC<DigitalCardPublicProps> = ({ slug }) =>
                       className="flex items-start gap-2.5 p-2.5 rounded-xl border transition-all"
                       style={{
                         backgroundColor: isNeu ? (isNeuDark ? '#14161D' : '#E0E5EC') : (contentContrast.isDarkBg ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.03)'),
-                        borderColor: isNeu ? undefined : (contentContrast.isDarkBg ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.08)'),
                         boxShadow: isNeu ? neuStyles.inset : undefined,
-                        border: isNeu ? neuStyles.border : undefined,
+                        borderWidth: '1px',
+                        borderStyle: 'solid',
+                        borderColor: isNeu ? (isNeuDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.75)') : (contentContrast.isDarkBg ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.08)'),
                       }}
                     >
                       <input
@@ -1464,12 +1596,42 @@ export const DigitalCardPublic: React.FC<DigitalCardPublicProps> = ({ slug }) =>
           </div>
         )}
 
-        {/* 11. Footer com texto customizável */}
-        <footer className="px-6 py-4 text-center border-t border-slate-200/60">
-          <p className="text-[11px]" style={{ color: contentContrast.footerColor }}>
-            {card.footerText || 'Cartão Digital Profissional. Todos os direitos reservados.'}
-          </p>
-        </footer>
+        {/* 11. Footer com texto customizável e redirecionamento configurável */}
+        {(() => {
+          const isClickable = card.footerLinkEnabled !== undefined
+            ? card.footerLinkEnabled
+            : (systemSettings?.footerLinkClickable !== false);
+
+          const rawUrl = (card.footerLinkUrl && card.footerLinkUrl.trim())
+            || systemSettings?.footerLinkUrl
+            || 'https://consultatomosinfinity.com.br';
+
+          const targetUrl = getFooterTargetUrl(rawUrl);
+          const isInternal = targetUrl.startsWith('/');
+
+          return (
+            <footer className="px-6 py-4 text-center border-t border-slate-200/60">
+              {isClickable ? (
+                <a
+                  href={targetUrl}
+                  target={isInternal ? '_self' : '_blank'}
+                  rel={isInternal ? undefined : 'noopener noreferrer'}
+                  onClick={() => handleOutboundClick('footer_link')}
+                  className="inline-block text-[11px] font-medium transition-opacity hover:opacity-75 underline decoration-slate-400/50 underline-offset-2 cursor-pointer"
+                  style={{ color: contentContrast.footerColor }}
+                >
+                  {card.footerText || 'Cartão digital disponibilizado por Átomos Infinity'}
+                </a>
+              ) : (
+                <p className="text-[11px]" style={{ color: contentContrast.footerColor }}>
+                  {card.footerText || 'Cartão digital disponibilizado por Átomos Infinity'}
+                </p>
+              )}
+            </footer>
+          );
+        })()}
+          </div>
+        </div>
         </div>
       </div>
 

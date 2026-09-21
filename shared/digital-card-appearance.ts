@@ -407,9 +407,9 @@ export function getCardContentContrastColors(options: {
 
   // Cores padrão de alto contraste sobre o fundo
   const defaultPrimaryText = isDarkBg ? '#FFFFFF' : '#0F172A';
-  const defaultLabelText = isDarkBg ? '#E2E8F0' : '#334155';
-  const defaultConsentText = isDarkBg ? '#F8FAFC' : '#1E293B';
-  const defaultMutedText = isDarkBg ? '#94A3B8' : '#64748B';
+  const defaultLabelText = isDarkBg ? '#E2E8F0' : '#1E293B';
+  const defaultConsentText = isDarkBg ? '#F8FAFC' : '#0F172A';
+  const defaultMutedText = isDarkBg ? '#94A3B8' : '#334155';
 
   // Se o usuário especificou supportTextColor
   const userSupportColor = options.supportTextColor;
@@ -470,10 +470,10 @@ export function getNeumorphicCardStyles(isDark: boolean = false) {
     raised: '6px 6px 14px #b8b9be, -6px -6px 14px #ffffff',
     raisedSubtle: '3px 3px 8px #b8b9be, -3px -3px 8px #ffffff',
     inset: 'inset 3px 3px 6px #b8b9be, inset -3px -3px 6px #ffffff',
-    border: '1px solid rgba(255, 255, 255, 0.6)',
-    headerBorder: '1px solid rgba(255, 255, 255, 0.6)',
-    textColor: '#2D3748',
-    subtextColor: '#64748B',
+    border: '1px solid rgba(255, 255, 255, 0.75)',
+    headerBorder: '1px solid rgba(255, 255, 255, 0.75)',
+    textColor: '#0F172A',
+    subtextColor: '#334155',
   };
 }
 

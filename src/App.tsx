@@ -8,6 +8,7 @@ import { LandingPage } from './pages/LandingPage.tsx';
 import { HelpPage } from './pages/HelpPage.tsx';
 import { ClientOnboardingFormPage } from './pages/ClientOnboardingFormPage.tsx';
 import { ThemeToggle } from './components/ThemeToggle.tsx';
+import { DynamicChatbotLoader } from './components/DynamicChatbotLoader.tsx';
 import { AuthProvider, useAuth } from './contexts/AuthContext.tsx';
 import { AuthModal } from './components/AuthModal.tsx';
 
@@ -213,6 +214,7 @@ export default function App() {
         </Route>
       </Switch>
       <ThemeToggle />
+      <DynamicChatbotLoader />
     </AuthProvider>
   );
 }

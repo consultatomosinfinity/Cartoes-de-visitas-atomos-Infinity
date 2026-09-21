@@ -606,8 +606,8 @@ export const DigitalCardLivePreview: React.FC<DigitalCardLivePreviewProps> = ({ 
           >
             {/* Container do Cartão com suporte a Imagem de Fundo (se configurada) */}
             <div className="relative w-full flex flex-col min-h-full">
-              {/* CAMADA DE IMAGEM DE FUNDO DO CARTÃO (atrás de tudo no cartão) */}
-              {card.contentBackgroundImageUrl && (
+              {/* CAMADA DE IMAGEM DE FUNDO DO CARTÃO (atrás de tudo no cartão - MODO CARTÃO INTEIRO) */}
+              {card.contentBackgroundImageUrl && card.contentBackgroundPosition !== 'below_header' && (
                 <div
                   className="absolute inset-0 z-0 pointer-events-none overflow-hidden"
                   style={{
@@ -632,7 +632,7 @@ export const DigitalCardLivePreview: React.FC<DigitalCardLivePreviewProps> = ({ 
               <div
                 className="relative z-10 w-full flex flex-col flex-1 min-h-full transition-all"
                 style={{
-                  backgroundColor: bgStyle,
+                  backgroundColor: card.contentBackgroundPosition === 'below_header' ? 'transparent' : bgStyle,
                   backdropFilter: isGlass ? glassStyles.backdropBlur : undefined,
                   boxShadow: isGlass ? glassStyles.shadow : undefined,
                   border: isGlass ? glassStyles.border : undefined,
@@ -673,6 +673,37 @@ export const DigitalCardLivePreview: React.FC<DigitalCardLivePreviewProps> = ({ 
                         </p>
                       )}
                     </div>
+
+                    {/* CORPO DO CARTÃO (Abaixo do Header) */}
+                    <div
+                      className="relative flex-1 flex flex-col transition-all"
+                      style={{
+                        backgroundColor: card.contentBackgroundPosition === 'below_header' ? bgStyle : undefined,
+                      }}
+                    >
+                      {/* CAMADA DE IMAGEM DE FUNDO - MODO ABAIXO DO HEADER */}
+                      {card.contentBackgroundImageUrl && card.contentBackgroundPosition === 'below_header' && (
+                        <div
+                          className="absolute inset-0 z-0 pointer-events-none overflow-hidden"
+                          style={{
+                            opacity: (card.contentBackgroundImageOpacity ?? 100) / 100,
+                          }}
+                        >
+                          <img
+                            src={card.contentBackgroundImageUrl}
+                            alt="Imagem de fundo do cartão abaixo do header"
+                            referrerPolicy="no-referrer"
+                            className="w-full h-full object-contain transition-transform"
+                            style={{
+                              objectPosition: `${card.contentBackgroundImageFocusX ?? 50}% ${card.contentBackgroundImageFocusY ?? 50}%`,
+                              transform: `scale(${(card.contentBackgroundImageScale ?? 100) / 100})`,
+                              transformOrigin: `${card.contentBackgroundImageFocusX ?? 50}% ${card.contentBackgroundImageFocusY ?? 50}%`,
+                            }}
+                          />
+                        </div>
+                      )}
+
+                      <div className="relative z-10 flex-1 flex flex-col">
 
               {/* Botões de Ação */}
               {(() => {
@@ -1153,9 +1184,10 @@ export const DigitalCardLivePreview: React.FC<DigitalCardLivePreviewProps> = ({ 
                           className="flex items-start gap-1.5 p-2 rounded-lg border transition-all"
                           style={{
                             backgroundColor: isNeu ? (isNeuDark ? '#14161D' : '#E0E5EC') : (contentContrast.isDarkBg ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.03)'),
-                            borderColor: isNeu ? undefined : (contentContrast.isDarkBg ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.08)'),
                             boxShadow: isNeu ? neuStyles.inset : undefined,
-                            border: isNeu ? neuStyles.border : undefined,
+                            borderWidth: '1px',
+                            borderStyle: 'solid',
+                            borderColor: isNeu ? (isNeuDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.75)') : (contentContrast.isDarkBg ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.08)'),
                           }}
                         >
                           <input
@@ -1202,10 +1234,29 @@ export const DigitalCardLivePreview: React.FC<DigitalCardLivePreviewProps> = ({ 
 
               {/* Rodapé */}
               <div className="px-4 py-2.5 text-center border-t border-slate-200/60">
-                <p className="text-[10px]" style={{ color: contentContrast.footerColor }}>
-                  {card.footerText || 'Cartão Digital Profissional'}
-                </p>
+                {card.footerLinkEnabled !== false ? (
+                  <a
+                    href={card.footerLinkUrl?.trim() || 'https://consultatomosinfinity.com.br'}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => {
+                      // Previne navegação indesejada durante a edição ao vivo no preview
+                      e.preventDefault();
+                    }}
+                    title={card.footerLinkUrl?.trim() ? `Link: ${card.footerLinkUrl}` : 'Link padrão: Átomos Infinity'}
+                    className="inline-block text-[10px] font-medium transition-opacity hover:opacity-75 underline decoration-slate-400/50 underline-offset-2 cursor-pointer"
+                    style={{ color: contentContrast.footerColor }}
+                  >
+                    {card.footerText || 'Cartão digital disponibilizado por Átomos Infinity'}
+                  </a>
+                ) : (
+                  <p className="text-[10px]" style={{ color: contentContrast.footerColor }}>
+                    {card.footerText || 'Cartão digital disponibilizado por Átomos Infinity'}
+                  </p>
+                )}
               </div>
+            </div>
+          </div>
             </div>
           </div>
         </div>

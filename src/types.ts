@@ -45,6 +45,17 @@ export interface SystemSettings {
   customWelcomeMessage?: string;
   platformLogoUrl?: string; // URL ou Base64 do logotipo master da plataforma
   platformTitle?: string; // Título/Nome principal da plataforma
+  
+  // Chatbot de Atendimento IA (Jotform / Externo / Átomos)
+  chatbotEnabled?: boolean; // Se true, carrega o script do chatbot
+  chatbotScriptUrl?: string; // URL do script embed (ex: https://cdn.jotfor.ms/agent/embedjs/.../embed.js)
+  chatbotEmbedCode?: string; // Tag completa ou código embed customizado
+  chatbotPages?: 'all' | 'landing_only' | 'cards_only' | 'landing_and_cards'; // Onde exibir
+
+  // Link do Rodapé dos Cartões Digitais
+  footerLinkClickable?: boolean; // Se o texto do rodapé "Cartão digital disponibilizado por Átomos Infinity" é clicável
+  footerLinkUrl?: string; // Link padrão de destino ao clicar no rodapé (ex: https://consultatomosinfinity.com.br)
+
   updatedAt?: string;
 }
 
@@ -129,6 +140,8 @@ export interface DigitalCard {
   ctaLabel: string;
   ctaUrl: string;
   footerText: string;
+  footerLinkEnabled?: boolean; // Se o rodapé é clicável (se undefined, herda configuração do Master)
+  footerLinkUrl?: string; // Link customizado do rodapé (se vazio, herda footerLinkUrl do Master)
   appearanceTheme: string;
   backgroundColor: string;
   headerOpacity?: number;
@@ -186,6 +199,7 @@ export interface DigitalCard {
   contentBackgroundImageFocusY?: number;
   contentBackgroundImageOpacity?: number;
   contentBackgroundImageScale?: number;
+  contentBackgroundPosition?: 'card_full' | 'below_header';
 
   // PWA / mobile
   mobileAppName?: string;

@@ -38,6 +38,9 @@ import {
   ToggleLeft,
   ToggleRight,
   HelpCircle,
+  Bot,
+  Code,
+  Globe,
 } from 'lucide-react';
 import { UserProfile, UserRole, UserPlan, UserAccountStatus, DigitalCard, SystemSettings } from '../types.ts';
 import { DigitalCardQrCode } from './DigitalCardQrCode.tsx';
@@ -79,6 +82,8 @@ export const AdminUsersManager: React.FC<AdminUsersManagerProps> = ({
     allowPublicRegistration: true,
     masterWhatsApp: '+55 (15) 99625-9353',
     customWelcomeMessage: '',
+    footerLinkClickable: true,
+    footerLinkUrl: 'https://consultatomosinfinity.com.br',
   });
 
   // Modais
@@ -321,7 +326,11 @@ export const AdminUsersManager: React.FC<AdminUsersManagerProps> = ({
 
       const updatedSettings = result.success && result.data?.settings ? result.data.settings : systemSettings;
       setSystemSettings(updatedSettings);
-      showNotification('success', 'Políticas de cadastro e degustação atualizadas com sucesso!');
+      try {
+        localStorage.setItem('atomos_system_settings', JSON.stringify(updatedSettings));
+        window.dispatchEvent(new CustomEvent('atomos_system_settings_updated', { detail: updatedSettings }));
+      } catch (e) {}
+      showNotification('success', 'Configurações globais e script do chatbot atualizados com sucesso!');
       setShowSettingsModal(false);
     } catch (err: any) {
       showNotification('error', err.message || 'Erro ao salvar configurações.');
@@ -1763,6 +1772,212 @@ Qualquer ajuste de dados, telefones ou ativação de novos recursos é só falar
                 </div>
               </div>
 
+              {/* 7. Chatbot de Atendimento IA (Átomos / Jotform / Script Externo) */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 space-y-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="space-y-0.5">
+                    <label className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                      <Bot className="w-4 h-4 text-sky-500" />
+                      Chatbot Inteligente de Atendimento (Átomos / Jotform / Externo)
+                    </label>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                      Ative e configure quando quiser o script do atendente virtual com IA para recepcionar e converter clientes na plataforma.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSystemSettings({
+                        ...systemSettings,
+                        chatbotEnabled: systemSettings.chatbotEnabled === false ? true : false,
+                      })
+                    }
+                    className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      systemSettings.chatbotEnabled !== false ? 'bg-sky-600' : 'bg-slate-300 dark:bg-slate-700'
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                        systemSettings.chatbotEnabled !== false ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {systemSettings.chatbotEnabled !== false && (
+                  <div className="space-y-3 pt-3 border-t border-slate-200 dark:border-slate-800">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                          <Code className="w-4 h-4 text-indigo-500" />
+                          Script URL (.js) ou Tag Embed do Chatbot
+                        </span>
+                        <span className="text-[11px] font-bold text-sky-600 dark:text-sky-400">
+                          Jotform / Typebot / Chatbase / Custom
+                        </span>
+                      </label>
+                      <input
+                        type="text"
+                        value={systemSettings.chatbotScriptUrl || ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          const match = val.match(/src=['"]([^'"]+)['"]/i);
+                          const scriptUrl = match ? match[1] : val;
+                          setSystemSettings({
+                            ...systemSettings,
+                            chatbotScriptUrl: scriptUrl,
+                            chatbotEmbedCode: val.includes('<script') ? val : `<script src='${scriptUrl}'></script>`,
+                          });
+                        }}
+                        placeholder="https://cdn.jotfor.ms/agent/embedjs/01a0bfa1d8107000848905e7ba8cb2c582a4/embed.js"
+                        className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white outline-none font-mono"
+                      />
+                      <div className="flex items-center gap-2 pt-1 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setSystemSettings({
+                              ...systemSettings,
+                              chatbotScriptUrl: 'https://cdn.jotfor.ms/agent/embedjs/01a0bfa1d8107000848905e7ba8cb2c582a4/embed.js',
+                              chatbotEmbedCode: "<script src='https://cdn.jotfor.ms/agent/embedjs/01a0bfa1d8107000848905e7ba8cb2c582a4/embed.js'></script>",
+                            })
+                          }
+                          className="px-2.5 py-1.5 text-[11px] font-semibold text-sky-600 hover:text-sky-700 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/50 border border-sky-200 dark:border-sky-800 rounded-lg transition"
+                        >
+                          Restaurar Script Padrão do Átomos (Jotform)
+                        </button>
+                        {systemSettings.chatbotScriptUrl && (
+                          <a
+                            href={systemSettings.chatbotScriptUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="px-2.5 py-1.5 text-[11px] font-semibold text-gray-600 hover:text-gray-900 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded-lg transition inline-flex items-center gap-1"
+                          >
+                            <span>Ver Script Fonte</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-gray-700 dark:text-gray-300">
+                        Onde o Chatbot deve ser exibido:
+                      </label>
+                      <select
+                        value={systemSettings.chatbotPages || 'all'}
+                        onChange={(e) =>
+                          setSystemSettings({
+                            ...systemSettings,
+                            chatbotPages: e.target.value as any,
+                          })
+                        }
+                        className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white outline-none"
+                      >
+                        <option value="all">🌐 Em toda a plataforma (Landing Page, Painéis e Cartões)</option>
+                        <option value="landing_only">🏠 Apenas na Landing Page Comercial / Institucional</option>
+                        <option value="cards_only">📇 Apenas nos Cartões Digitais Públicos</option>
+                        <option value="landing_and_cards">✨ Na Landing Page e nos Cartões Públicos</option>
+                      </select>
+                    </div>
+
+                    <div className="text-[11px] text-sky-700 dark:text-sky-300/90 bg-sky-500/10 p-2.5 rounded-xl border border-sky-500/20 flex items-start gap-2">
+                      <Bot className="w-4 h-4 text-sky-500 shrink-0 mt-0.5" />
+                      <div>
+                        <strong>Atualização em Tempo Real:</strong> Você pode mudar ou substituir o script do chatbot a qualquer momento. Ao salvar, a nova versão entra em vigor instantaneamente sem necessidade de mexer no código-fonte.
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 8. Link e Redirecionamento do Rodapé dos Cartões (Átomos Infinity) */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 space-y-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="space-y-0.5">
+                    <label className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                      <Globe className="w-4 h-4 text-amber-500" />
+                      Rodapé dos Cartões: Link e Redirecionamento (Átomos Infinity)
+                    </label>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                      Configure se o texto <em>"Cartão digital disponibilizado por Átomos Infinity"</em> será clicável e para qual site o visitante será encaminhado.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSystemSettings({
+                        ...systemSettings,
+                        footerLinkClickable: systemSettings.footerLinkClickable === false ? true : false,
+                      })
+                    }
+                    className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      systemSettings.footerLinkClickable !== false ? 'bg-amber-600' : 'bg-slate-300 dark:bg-slate-700'
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                        systemSettings.footerLinkClickable !== false ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {systemSettings.footerLinkClickable !== false && (
+                  <div className="space-y-3 pt-2 border-t border-slate-200 dark:border-slate-800">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+                        Link Padrão do Site (Configurado pelo Master)
+                      </label>
+                      <input
+                        type="text"
+                        value={systemSettings.footerLinkUrl || ''}
+                        onChange={(e) =>
+                          setSystemSettings({ ...systemSettings, footerLinkUrl: e.target.value })
+                        }
+                        placeholder="https://consultatomosinfinity.com.br"
+                        className="w-full px-3.5 py-2 text-xs rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white outline-none font-mono"
+                      />
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
+                        Ao clicar no texto do rodapé do cartão, o usuário será direcionado para este endereço.
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                      <span className="text-[11px] font-semibold text-gray-500">Atalhos rápidos:</span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSystemSettings({ ...systemSettings, footerLinkUrl: 'https://consultatomosinfinity.com.br' })
+                        }
+                        className="px-2.5 py-1 text-[11px] bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-gray-800 dark:text-gray-200 rounded-lg transition"
+                      >
+                        Site Átomos Infinity
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSystemSettings({ ...systemSettings, footerLinkUrl: '/' })}
+                        className="px-2.5 py-1 text-[11px] bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-gray-800 dark:text-gray-200 rounded-lg transition"
+                      >
+                        Landing Page (Início)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSystemSettings({
+                            ...systemSettings,
+                            footerLinkUrl: 'https://wa.me/5515996259353?text=Ol%C3%A1%2C%20gostaria%20de%20informa%C3%A7%C3%B5es%20sobre%20o%20Cart%C3%A3o%20Digital%20%C3%81tomos',
+                          })
+                        }
+                        className="px-2.5 py-1 text-[11px] bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/60 dark:hover:bg-emerald-900 text-emerald-800 dark:text-emerald-200 rounded-lg transition"
+                      >
+                        WhatsApp Oficial
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Ações do Modal */}
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-800">
                 <button
@@ -1778,7 +1993,7 @@ Qualquer ajuste de dados, telefones ou ativação de novos recursos é só falar
                   className="px-6 py-2.5 text-xs font-bold text-white bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 rounded-xl shadow-md transition disabled:opacity-50 flex items-center gap-2"
                 >
                   <Check className="w-4 h-4" />
-                  {settingsLoading ? 'Salvando...' : 'Salvar Políticas de Cadastro'}
+                  {settingsLoading ? 'Salvando...' : 'Salvar Configurações do Sistema'}
                 </button>
               </div>
             </form>
